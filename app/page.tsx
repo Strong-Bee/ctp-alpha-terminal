@@ -35,7 +35,8 @@ export default function Home() {
   const [answer, setAnswer] = useState("");
   const [loadingAi, setLoadingAi] = useState(false);
   const [sidebar, setSidebar] = useState(true);
-  const [apiBase, setApiBase] = useState(process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000");
+  const configuredApi = process.env.NEXT_PUBLIC_API_URL?.trim();
+  const [apiBase] = useState(() => configuredApi && /^https?:\\/\\//.test(configuredApi) ? configuredApi : "http://localhost:4000");
   const base = apiBase.replace(/\/$/, "");
 
   const load = async () => {
