@@ -4,7 +4,7 @@ import Link from "next/link";
 import {
   Activity, BarChart3, Bell, BrainCircuit, CircleDollarSign, FileText, Gauge,
   LayoutDashboard, Moon, Network, Newspaper, Settings, ShieldAlert, Sparkles,
-  Target, TrendingUp, Wallet, RefreshCw, Clock3, AlertTriangle
+  Target, TrendingUp, Wallet, RefreshCw, Clock3, AlertTriangle, ExternalLink
 } from "lucide-react";
  import { useCallback, useEffect, useMemo, useState } from "react";
 
