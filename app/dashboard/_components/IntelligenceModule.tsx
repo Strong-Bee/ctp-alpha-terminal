@@ -12,7 +12,7 @@ import { signOut, useSession } from "next-auth/react";
 type ModuleKey =
   | "overview" | "ai" | "live-news" | "markets" | "narratives" | "alpha-signals" | "launches"
   | "on-chain" | "wallet-intel" | "defi" | "risk-engine" | "order-flow" | "macro"
-  | "cycles" | "thesis" | "alerts" | "settings" | "trading-terminal";
+  | "cycles" | "thesis" | "alerts" | "settings";
 
 type NewsItem = {
   id: string; source: string; title: string; url: string; summary: string;
@@ -28,7 +28,6 @@ type IntelResponse = {
 };
 
 const navigation = [
-  ["Trading Terminal","/dashboard/trading-terminal",Activity,"trading-terminal"],
   ["Overview","/dashboard",LayoutDashboard,"overview"],
   ["AI Assistant","/dashboard/ai",BrainCircuit,"ai"],
   ["Live News","/dashboard/live-news",Newspaper,"live-news"],
@@ -66,7 +65,6 @@ const meta: Record<ModuleKey, { eyebrow: string; title: string; description: str
   thesis: { eyebrow: "Research Workspace", title: "Thesis", description: "Menyusun dan menguji thesis dengan evidence, catalyst, target, dan invalidation." },
   alerts: { eyebrow: "Alert Center", title: "Alerts", description: "Pusat event monitoring untuk price, volume, liquidity, wallet, news, macro, dan risk." },
   settings: { eyebrow: "System", title: "Settings", description: "Status API, data sources, AI provider, refresh interval, dan notification configuration." },
-  "trading-terminal": { eyebrow: "Execution Workspace", title: "Trading Terminal", description: "Workspace terpadu untuk chart, watchlist, market overview, economic calendar, alpha signal, dan live crypto news." },
 };
 
 function MarkdownResponse({ content }: { content: string }) {
