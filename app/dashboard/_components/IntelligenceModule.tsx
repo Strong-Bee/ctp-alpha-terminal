@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Moon, Network, Newspaper, Settings, ShieldAlert, Sparkles,
   Target, TrendingUp, Wallet, RefreshCw, Clock3, AlertTriangle, ExternalLink
 } from "lucide-react";
- import { useCallback, useEffect, useMemo, useState } from "react";
+ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type ModuleKey =
   | "overview" | "ai" | "live-news" | "markets" | "narratives" | "alpha-signals" | "launches"
@@ -241,16 +241,20 @@ function MarketTable({ markets }: { markets: MarketItem[] }) {
     </table>
   </div>;
 }
-function TradingViewChart({ symbol = "BINANCE:BTCUSDT", height = 900 }: { symbol?: string; height?: number }) {
-  const [host, setHost] = useState<HTMLDivElement | null>(null);
+function TradingViewChart({ symbol = "BINANCE:BTCUSDT" }: { symbol?: string }) {
+  const hostRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    const host = hostRef.current;
     if (!host) return;
-    host.innerHTML = "";
+
+    host.replaceChildren();
+
     const widget = document.createElement("div");
     widget.className = "tradingview-widget-container__widget";
-    widget.style.height = "calc(100% - 28px)";
     widget.style.width = "100%";
+    widget.style.height = "100%";
+
     const script = document.createElement("script");
     script.src = "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
     script.type = "text/javascript";
@@ -274,26 +278,36 @@ function TradingViewChart({ symbol = "BINANCE:BTCUSDT", height = 900 }: { symbol
       hotlist: false,
       calendar: true,
       studies: ["Volume@tv-basicstudies", "RSI@tv-basicstudies", "MACD@tv-basicstudies"],
-      watchlist: ["BINANCE:BTCUSDT", "BINANCE:ETHUSDT", "BINANCE:SOLUSDT", "BINANCE:BNBUSDT", "BINANCE:XRPUSDT"],
+      watchlist: [
+        "BINANCE:BTCUSDT",
+        "BINANCE:ETHUSDT",
+        "BINANCE:SOLUSDT",
+        "BINANCE:BNBUSDT",
+        "BINANCE:XRPUSDT",
+      ],
       support_host: "https://www.tradingview.com",
     });
+
     host.appendChild(widget);
-    host.appendChild(script);
+    widget.appendChild(script);
+
     return () => {
-      host.innerHTML = "";
+      host.replaceChildren();
     };
-  }, [host, symbol]);
+  }, [symbol]);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#080b11]">
-      <div ref={setHost} className="tradingview-widget-container w-full" style={{ height }} />
+    <div className="w-full overflow-hidden rounded-2xl border border-white/10 bg-[#080b11]">
+      <div
+        ref={hostRef}
+        className="tradingview-widget-container h-[620px] w-full sm:h-[760px] lg:h-[900px] xl:h-[980px]"
+      />
       <div className="border-t border-white/5 px-3 py-2 text-[10px] text-slate-600">
         TradingView Advanced Chart • display-only market visualization
       </div>
     </div>
   );
 }
-
 function EconomicCalendarWidget() {
   const [host, setHost] = useState<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -430,7 +444,7 @@ function MarketsModule({ intel }: { intel: IntelResponse | null }) {
   return <div className="space-y-5">
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Kpi label="Tracked Assets" value={String(markets.length)} detail="CoinGecko market feed"/><Kpi label="Top Volume" value={volume?.symbol ?? "—"} detail={volume ? formatUsd(volume.volume24h) : "no data"}/><Kpi label="Top Gainer" value={gainers[0] ? gainers[0].symbol + " " + (gainers[0].change24h >= 0 ? "+" : "") + gainers[0].change24h.toFixed(2) + "%" : "—"}/><Kpi label="Top Loser" value={losers[0] ? losers[0].symbol + " " + losers[0].change24h.toFixed(2) + "%" : "—"}/></div>
     <Section title="TradingView Market Chart">
-      <div className="-mx-4 sm:-mx-6 lg:-mx-8"><div className="w-full min-w-0 overflow-hidden"><div className="h-[560px] w-full sm:h-[700px] lg:h-[900px]"><TradingViewChart symbol="BINANCE:BTCUSDT" height={900}/></div></div></div>
+      <div className="-mx-4 min-w-0 sm:-mx-6 lg:-mx-8"><TradingViewChart symbol={symbol}/></div>
     </Section>
     <Section title="Live Market Scanner">{markets.length ? <MarketTable markets={markets}/> : <EmptyState title="Market feed kosong"/>}</Section>
     <div className="grid gap-5 xl:grid-cols-2"><Section title="Top Gainers"><MarketTable markets={gainers}/></Section><Section title="Top Losers"><MarketTable markets={losers}/></Section></div>
