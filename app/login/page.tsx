@@ -1,12 +1,28 @@
 "use client";
+
 import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email,setEmail]=useState(""); const [password,setPassword]=useState(""); const [error,setError]=useState("");
-  function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();setError("");if(!email||!password){setError("Email dan password wajib diisi.");return;}router.push("/dashboard");}
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+
+  function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError("");
+
+    if (!email || !password) {
+      setError("Email dan password wajib diisi.");
+      return;
+    }
+
+    localStorage.setItem("ctp_alpha_authenticated", "true");
+    router.push("/dashboard");
+  }
+
   return <main className="grid min-h-screen place-items-center bg-[#05070b] px-6 text-white"><div className="w-full max-w-md">
     <Link href="/" className="mb-8 block text-center text-sm text-slate-500 hover:text-cyan-300">← Kembali ke CTP Alpha</Link>
     <div className="rounded-3xl border border-white/10 bg-white/[.035] p-8 shadow-2xl">
