@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import IntelligenceModule from "../_components/IntelligenceModule";
 
 const allowed = new Set([
-  "trading-terminal","ai","alpha-signals","launches","on-chain","wallet-intel","defi","risk-engine",
+  "ai","alpha-signals","launches","on-chain","wallet-intel","defi","risk-engine",
   "order-flow","macro","cycles","thesis","alerts","settings"
 ]);
 
