@@ -37,14 +37,21 @@ let cache: { at: number; news: CryptoNewsItem[]; markets: MarketItem[] } = {
 };
 
 function clean(value: string) {
-  return value
-    .replace(/<!\[CDATA\[|\]\]>/g, "")
-    .replace(/<[^>]*>/g, " ")
+  const decoded = value
     .replace(/&amp;/g, "&")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
+    .replace(/&#x2F;/gi, "/")
+    .replace(/&#x27;/gi, "'")
+    .replace(/&#x60;/gi, "`");
+
+  return decoded
+    .replace(/<!\[CDATA\[|\]\]>/g, "")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]*>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
