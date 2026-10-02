@@ -11,6 +11,7 @@ import { healthRouter } from "./routes/health.js";
 import { newsRouter } from "./routes/news.js";
 import { realtimeRouter } from "./routes/realtime.js";
 import { macroRouter } from "./routes/macro.js";
+import { onchainRouter } from "./routes/onchain.js";
 
 export const app = express();
 app.disable("x-powered-by");
@@ -42,4 +43,5 @@ app.use("/api/v1/dex", dexRouter);
 app.use("/api/v1/news", newsRouter);
 app.use("/api/v1/realtime", realtimeRouter);
 app.use("/api/v1/macro", macroRouter);
+app.use("/api/v1/onchain", onchainRouter);
 app.use((_req, res) => res.status(404).json({ error: "Not found" }));
