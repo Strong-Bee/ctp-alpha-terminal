@@ -70,16 +70,13 @@ const meta: Record<ModuleKey, { eyebrow: string; title: string; description: str
 };
 
 function AIAssistantModule() {
-  const [testing,setTesting]=useState(false);
+  const [message,setMessage]=useState("");
   const [answer,setAnswer]=useState("");
+  const [loading,setLoading]=useState(false);
   const [error,setError]=useState("");
-  const [settings,setSettings]=useState({
-    provider:"nvidia",
-    baseUrl:"https://integrate.api.nvidia.com/v1",
-    model:"nvidia/nemotron-3-ultra-550b-a55b",
-    apiKeyConfigured:false,
-    reasoningEffort:"medium",
-  });
+  const [models,setModels]=useState<string[]>([]);
+  const [model,setModel]=useState("nvidia/nemotron-3-ultra-550b-a55b");
+  const [modelsLoading,setModelsLoading]=useState(true);
 
   const parseJsonResponse = async (response: Response): Promise<Record<string, any>> => {
     const raw = await response.text();
@@ -88,63 +85,91 @@ function AIAssistantModule() {
     catch { throw new Error(`Server returned invalid JSON (HTTP ${response.status})`); }
   };
 
-  const loadSettings=useCallback(async()=>{
+  const loadModels=useCallback(async()=>{
+    setModelsLoading(true);
     try{
-      const r=await fetch("/api/ai/config",{cache:"no-store",credentials:"same-origin",headers:{Accept:"application/json"}});
+      const r=await fetch("/api/ai/models",{cache:"no-store",credentials:"same-origin",headers:{Accept:"application/json"}});
       const data=await parseJsonResponse(r);
-      if(!r.ok) throw new Error(data.error||"Failed to load AI settings");
-      setSettings(v=>({...v,...data.settings}));
-    }catch(e){setError(e instanceof Error?e.message:"Failed to load AI settings");}
-  },[]);
-
-  useEffect(()=>{void loadSettings();},[loadSettings]);
-
-  const testModel=async()=>{
-    if(testing)return;
-    setTesting(true);
-    setError("");
-    setAnswer("");
-    try{
-      const r=await fetch("/api/ai/test",{method:"POST",credentials:"same-origin",cache:"no-store",headers:{"Content-Type":"application/json","Accept":"application/json"}});
-      const data=await parseJsonResponse(r);
-      if(!r.ok) throw new Error(data.error||("Connection test failed (HTTP "+r.status+")"));
-      setAnswer(data.answer||"CTP AI connection OK");
+      if(!r.ok) throw new Error(data.error||"Failed to load NVIDIA models");
+      const ids=Array.isArray(data.models)
+        ? data.models.map((item:any)=>typeof item==="string"?item:item?.id).filter((id:any):id is string=>Boolean(id))
+        : [];
+      setModels(ids);
+      if(ids.length && !ids.includes(model)) setModel(ids[0]);
     }catch(e){
-      setError(e instanceof Error?e.message:"Connection test failed");
+      setError(e instanceof Error?e.message:"Failed to load NVIDIA models");
     }finally{
-      setTesting(false);
+      setModelsLoading(false);
+    }
+  },[model]);
+
+  useEffect(()=>{void loadModels();},[loadModels]);
+
+  const send=async()=>{
+    if(!message.trim()||loading)return;
+    setLoading(true);
+    setError("");
+    try{
+      const r=await fetch("/api/ai/chat",{
+        method:"POST",
+        credentials:"same-origin",
+        cache:"no-store",
+        headers:{"Content-Type":"application/json","Accept":"application/json"},
+        body:JSON.stringify({message,model}),
+      });
+      const data=await parseJsonResponse(r);
+      if(!r.ok) throw new Error(data.error||"AI request failed");
+      setAnswer(data.answer||"AI returned an empty answer");
+    }catch(e){
+      setError(e instanceof Error?e.message:"AI request failed");
+    }finally{
+      setLoading(false);
     }
   };
 
   return <div className="space-y-5">
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <Kpi label="Provider" value={settings.provider.toUpperCase()}/>
-      <Kpi label="Model" value={settings.model.split("/").pop()||settings.model}/>
-      <Kpi label="API Key" value={settings.apiKeyConfigured?"CONFIGURED":"REQUIRED"} detail="from ENV"/>
-      <Kpi label="Reasoning" value={settings.reasoningEffort.toUpperCase()}/>
-    </div>
+    <Section title="NVIDIA AI Assistant">
+      <div className="space-y-4">
+        <div>
+          <label className="text-xs text-slate-500">NVIDIA Model</label>
+          <select
+            value={model}
+            onChange={e=>setModel(e.target.value)}
+            disabled={modelsLoading || !models.length}
+            className="mt-2 w-full rounded-xl border border-white/10 bg-[#0a0e15] px-3 py-3 text-sm text-slate-200 outline-none focus:border-cyan-400/30 disabled:opacity-50"
+          >
+            {modelsLoading
+              ? <option>Loading NVIDIA models…</option>
+              : models.length
+                ? models.map(id=><option key={id} value={id}>{id}</option>)
+                : <option>No NVIDIA models available</option>}
+          </select>
+          <div className="mt-2 flex items-center justify-between text-[10px] text-slate-600">
+            <span>{models.length ? models.length+" NVIDIA models available" : "NVIDIA model list unavailable"}</span>
+            <button type="button" onClick={()=>void loadModels()} className="text-cyan-300 hover:text-cyan-200">Refresh models</button>
+          </div>
+        </div>
 
-    <Section title="AI Model Status">
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-xl border border-white/5 bg-white/[.02] p-4">
-          <div className="text-[10px] uppercase tracking-wider text-slate-600">Provider</div>
-          <div className="mt-2 text-sm font-semibold text-slate-200">{settings.provider.toUpperCase()}</div>
+        <div className="rounded-2xl border border-white/10 bg-black/20 p-3 sm:p-4">
+          <textarea
+            value={message}
+            onChange={e=>setMessage(e.target.value)}
+            onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();void send();}}}
+            placeholder="Tanyakan apa saja kepada NVIDIA AI..."
+            className="min-h-40 w-full resize-y bg-transparent p-2 text-sm text-white outline-none placeholder:text-slate-700"
+          />
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-white/5 pt-3">
+            <span className="text-[10px] text-slate-600">Enter untuk kirim • Shift+Enter untuk baris baru</span>
+            <button
+              type="button"
+              disabled={loading||!message.trim()||!model}
+              onClick={()=>void send()}
+              className="rounded-xl bg-cyan-400 px-5 py-2.5 text-sm font-bold text-black disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {loading?"Thinking…":"Send"}
+            </button>
+          </div>
         </div>
-        <div className="rounded-xl border border-white/5 bg-white/[.02] p-4">
-          <div className="text-[10px] uppercase tracking-wider text-slate-600">Model</div>
-          <div className="mt-2 break-all text-sm font-semibold text-slate-200">{settings.model}</div>
-        </div>
-        <div className="rounded-xl border border-white/5 bg-white/[.02] p-4 md:col-span-2">
-          <div className="text-[10px] uppercase tracking-wider text-slate-600">Endpoint</div>
-          <div className="mt-2 break-all text-sm text-slate-400">{settings.baseUrl}</div>
-        </div>
-        <div className="rounded-xl border border-cyan-400/10 bg-cyan-400/[.03] p-4 text-xs leading-5 text-slate-400 md:col-span-2">
-          AI dikonfigurasi dari ENV server. API key tidak ditampilkan dan tidak dikirim ke browser.
-        </div>
-      </div>
-      <div className="mt-4 flex flex-wrap gap-3">
-        <button type="button" onClick={()=>void loadSettings()} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs font-semibold text-slate-300">Reload ENV</button>
-        <button type="button" onClick={()=>void testModel()} disabled={testing || !settings.apiKeyConfigured} className="rounded-xl border border-cyan-400/20 px-4 py-2.5 text-xs font-semibold text-cyan-300 disabled:opacity-30">{testing?"Testing…":"Test Model"}</button>
       </div>
     </Section>
 
