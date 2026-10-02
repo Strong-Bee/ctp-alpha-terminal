@@ -7,7 +7,7 @@ import {
   Target, TrendingUp, Wallet, RefreshCw, Clock3, AlertTriangle, ExternalLink
 } from "lucide-react";
  import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 
 type ModuleKey =
   | "overview" | "ai" | "live-news" | "markets" | "narratives" | "alpha-signals" | "launches"
@@ -466,6 +466,83 @@ function OverviewModule({ intel }: { intel: IntelResponse | null }) {
   const avg = markets.length ? markets.reduce((a,m)=>a+m.change24h,0)/markets.length : 0;
   return <div className="space-y-5"><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Kpi label="Market Breadth" value={markets.length ? (avg>=0?"+":"")+avg.toFixed(2)+"%" : "—"} detail="average 24h change"/><Kpi label="Live Stories" value={String(news.length)} detail="multi-source news"/><Kpi label="BTC" value={btc ? formatPrice(btc.price)+" "+(btc.change24h>=0?"+":"")+btc.change24h.toFixed(2)+"%" : "—"}/><Kpi label="ETH / SOL" value={eth&&sol ? eth.change24h.toFixed(1)+"% / "+sol.change24h.toFixed(1)+"%" : "—"} detail="24h change"/></div><div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(280px,1fr)]"><Section title="Alpha Pipeline"><div className="grid gap-2 sm:grid-cols-2">{["Live news discovery","Market confirmation","Narrative extraction","Liquidity / momentum","Risk validation","Thesis review"].map((x,i)=><div key={x} className="rounded-xl border border-white/5 p-3"><div className="text-[10px] text-slate-600">0{i+1}</div><div className="mt-1 text-sm text-slate-300">{x}</div></div>)}</div></Section><Section title="Latest Intelligence">{news.length ? <NewsList news={news.slice(0,7)}/> : <EmptyState/>}</Section></div></div>;
 }
+function SettingsModule({ intel }: { intel: IntelResponse | null }) {
+  const { data: session } = useSession();
+  const user = session?.user;
+  const [displayName, setDisplayName] = useState("");
+  const [timezone, setTimezone] = useState("Asia/Jakarta");
+  const [theme, setTheme] = useState("dark");
+  const [compactMode, setCompactMode] = useState(false);
+  const [newsRefresh, setNewsRefresh] = useState("15");
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("ctp_alpha_settings");
+    if (!stored) return;
+    try {
+      const value = JSON.parse(stored) as { displayName?: string; timezone?: string; theme?: string; compactMode?: boolean; newsRefresh?: string };
+      setDisplayName(value.displayName ?? "");
+      setTimezone(value.timezone ?? "Asia/Jakarta");
+      setTheme(value.theme ?? "dark");
+      setCompactMode(Boolean(value.compactMode));
+      setNewsRefresh(value.newsRefresh ?? "15");
+    } catch {}
+  }, []);
+
+  function saveSettings() {
+    localStorage.setItem("ctp_alpha_settings", JSON.stringify({ displayName, timezone, theme, compactMode, newsRefresh }));
+    setSaved(true);
+    window.setTimeout(() => setSaved(false), 2200);
+  }
+
+  return <div className="space-y-5">
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <Kpi label="Account" value={user ? "AUTHENTICATED" : "UNKNOWN"} detail={user?.email ?? "session unavailable"} />
+      <Kpi label="News Feed" value={intel ? "ONLINE" : "OFFLINE"} detail={intel ? String(intel.news.length) + " stories" : "no response"} />
+      <Kpi label="Market Feed" value={intel?.markets.length ? "ONLINE" : "NO DATA"} detail="CoinGecko" />
+      <Kpi label="Refresh" value={intel ? Math.round(intel.refreshMs / 1000) + "s" : "—"} />
+    </div>
+
+    <Section title="Profile">
+      <div className="grid gap-5 lg:grid-cols-[auto_1fr]">
+        <div className="flex items-center gap-4">
+          {user?.image ? <img src={user.image} alt="" className="h-16 w-16 rounded-2xl border border-white/10 object-cover" /> : <div className="grid h-16 w-16 place-items-center rounded-2xl border border-cyan-400/20 bg-cyan-400/10 text-xl font-black text-cyan-300">{(user?.name ?? user?.email ?? "U").slice(0, 1).toUpperCase()}</div>}
+          <div><div className="font-semibold text-white">{user?.name ?? "CTP Alpha User"}</div><div className="mt-1 text-xs text-slate-500">{user?.email ?? "No email"}</div><div className="mt-2 text-[10px] uppercase tracking-wider text-emerald-400">OAuth account</div></div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="text-xs text-slate-500">Display name<input value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder={user?.name ?? "Your name"} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-400/40" /></label>
+          <label className="text-xs text-slate-500">Timezone<select value={timezone} onChange={e => setTimezone(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white outline-none"><option>Asia/Jakarta</option><option>UTC</option><option>Asia/Singapore</option><option>Asia/Tokyo</option><option>Europe/London</option><option>America/New_York</option></select></label>
+        </div>
+      </div>
+    </Section>
+
+    <Section title="Appearance & Workspace">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <label className="text-xs text-slate-500">Theme<select value={theme} onChange={e => setTheme(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white outline-none"><option value="dark">Dark Terminal</option><option value="system">System</option></select></label>
+        <label className="text-xs text-slate-500">News refresh<select value={newsRefresh} onChange={e => setNewsRefresh(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white outline-none"><option value="15">15 seconds</option><option value="30">30 seconds</option><option value="60">60 seconds</option></select></label>
+        <label className="flex items-center gap-3 rounded-xl border border-white/5 bg-white/[.02] p-3 text-xs text-slate-400"><input type="checkbox" checked={compactMode} onChange={e => setCompactMode(e.target.checked)} className="accent-cyan-300" /> Compact dashboard</label>
+      </div>
+    </Section>
+
+    <Section title="Security & Session">
+      <div className="grid gap-3 md:grid-cols-3">
+        <div className="rounded-xl border border-white/5 bg-white/[.02] p-4"><div className="text-xs text-slate-500">Authentication</div><div className="mt-2 font-semibold text-emerald-300">OAuth Session Active</div></div>
+        <div className="rounded-xl border border-white/5 bg-white/[.02] p-4"><div className="text-xs text-slate-500">Provider</div><div className="mt-2 font-semibold text-slate-300">{user?.email ? "Google / Apple" : "—"}</div></div>
+        <button onClick={() => void signOut({ callbackUrl: "/login" })} className="rounded-xl border border-rose-400/20 bg-rose-400/5 p-4 text-left text-rose-300 hover:bg-rose-400/10"><div className="text-xs">Session</div><div className="mt-2 font-semibold">Sign out</div></button>
+      </div>
+    </Section>
+
+    <Section title="Data Sources">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{(intel?.sources ?? []).map(s => <div key={s} className="rounded-xl border border-white/5 bg-white/[.02] p-3 text-xs text-slate-300">{s}<span className="float-right text-emerald-400">online</span></div>)}{!intel?.sources?.length && <div className="text-xs text-slate-600">No source response.</div>}</div>
+    </Section>
+
+    <div className="flex items-center justify-end gap-3">
+      {saved && <span className="text-xs text-emerald-400">Settings saved</span>}
+      <button onClick={saveSettings} className="rounded-xl bg-cyan-300 px-5 py-2.5 text-xs font-bold text-slate-950 hover:bg-cyan-200">Save Settings</button>
+    </div>
+  </div>;
+}
+
 function OperationalModule({ module, intel }: { module: ModuleKey; intel: IntelResponse | null }) {
   const [launches, setLaunches] = useState<Record<string, unknown> | null>(null);
   const [launchError, setLaunchError] = useState("");
@@ -502,12 +579,11 @@ function OperationalModule({ module, intel }: { module: ModuleKey; intel: IntelR
     cycles:{title:"Cycle Context",items:["Accumulation","Markup","Distribution","Markdown","Halving timeline","Wyckoff context"],note:"Cycle module membutuhkan time-series/historical provider."},
     thesis:{title:"Thesis Workspace",items:["Setup","Catalyst","Evidence","Entry","Target","Invalidation"],note:"Thesis harus menyimpan evidence yang berasal dari data terminal."},
     alerts:{title:"Alert Rules",items:["Price threshold","Volume spike","Liquidity change","Wallet event","News keyword","Macro event"],note:"Rule engine dapat dipetakan ke Redis/BullMQ dan channel notification."},
-    settings:{title:"System Status",items:["API","News feed","Market feed","DEX Screener","NVIDIA AI","Redis / Worker"],note:"Status harus berasal dari health check, bukan label dummy."},
   };
+  if (module === "settings") return <SettingsModule intel={intel} />;
   const d=data[module]; if(!d) return null;
-  return <div className="space-y-5"><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Kpi label="Module" value={meta[module].title}/><Kpi label="News Feed" value={intel ? "ONLINE":"OFFLINE"} detail={intel ? String(intel.news.length)+" stories":"no response"}/><Kpi label="Market Feed" value={intel?.markets.length ? "ONLINE":"NO DATA"} detail="CoinGecko"/><Kpi label="Refresh" value={intel ? Math.round(intel.refreshMs/1000)+"s":"—"}/></div><Section title={d.title}><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{d.items.map(x=><div key={x} className="rounded-xl border border-white/5 bg-white/[.02] p-4"><div className="text-sm text-slate-300">{x}</div><div className="mt-2 text-[10px] uppercase tracking-wider text-slate-600">{module==="settings"?"status check":"data input"}</div></div>)}</div><div className="mt-4 rounded-xl border border-amber-400/10 bg-amber-400/[.03] p-4 text-xs leading-5 text-slate-500">{d.note}</div></Section>{module==="launches"&&<Section title="Live DEX Screener Feeds">{launchError&&<div className="mb-3 rounded-xl border border-rose-400/10 bg-rose-400/[.03] p-3 text-xs text-rose-300">{launchError}</div>}<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{["token-profiles/latest","token-profiles/recent","token-boosts/latest","token-boosts/top","ads/latest","community-takeovers/latest"].map(key=>{const value=launches?.[key];const count=Array.isArray(value)?value.length:(value&&typeof value==="object"&&Array.isArray((value as {pairs?:unknown[]}).pairs)?(value as {pairs:unknown[]}).pairs.length:0);return <div key={key} className="rounded-xl border border-white/5 bg-white/[.02] p-4"><div className="text-xs text-slate-400">{key}</div><div className="mt-2 text-xl font-bold text-slate-200">{launches?count:"—"}</div><div className="mt-1 text-[10px] uppercase tracking-wider text-slate-600">records</div></div>})}</div></Section>}{module==="settings"&&<Section title="Current News Sources"><div className="grid gap-2 sm:grid-cols-2">{(intel?.sources??[]).map(s=><div key={s} className="rounded-xl border border-white/5 p-3 text-xs text-slate-300">{s}<span className="float-right text-emerald-400">online</span></div>)}</div></Section>}</div>;
+  return <div className="space-y-5"><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Kpi label="Module" value={meta[module].title}/><Kpi label="News Feed" value={intel ? "ONLINE":"OFFLINE"} detail={intel ? String(intel.news.length)+" stories":"no response"}/><Kpi label="Market Feed" value={intel?.markets.length ? "ONLINE":"NO DATA"} detail="CoinGecko"/><Kpi label="Refresh" value={intel ? Math.round(intel.refreshMs/1000)+"s":"—"}/></div><Section title={d.title}><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{d.items.map(x=><div key={x} className="rounded-xl border border-white/5 bg-white/[.02] p-4"><div className="text-sm text-slate-300">{x}</div><div className="mt-2 text-[10px] uppercase tracking-wider text-slate-600">data input</div></div>)}</div><div className="mt-4 rounded-xl border border-amber-400/10 bg-amber-400/[.03] p-4 text-xs leading-5 text-slate-500">{d.note}</div></Section>{module==="launches"&&<Section title="Live DEX Screener Feeds">{launchError&&<div className="mb-3 rounded-xl border border-rose-400/10 bg-rose-400/[.03] p-3 text-xs text-rose-300">{launchError}</div>}<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{["token-profiles/latest","token-profiles/recent","token-boosts/latest","token-boosts/top","ads/latest","community-takeovers/latest"].map(key=>{const value=launches?.[key];const count=Array.isArray(value)?value.length:(value&&typeof value==="object"&&Array.isArray((value as {pairs?:unknown[]}).pairs)?(value as {pairs:unknown[]}).pairs.length:0);return <div key={key} className="rounded-xl border border-white/5 bg-white/[.02] p-4"><div className="text-xs text-slate-400">{key}</div><div className="mt-2 text-xl font-bold text-slate-200">{launches?count:"—"}</div><div className="mt-1 text-[10px] uppercase tracking-wider text-slate-600">records</div></div>})}</div></Section>}</div>;
 }
-
 const chainExplorers = [
   ["Solscan", "https://solscan.io/", "Solana"],
   ["Etherscan", "https://etherscan.io/", "Ethereum"],
