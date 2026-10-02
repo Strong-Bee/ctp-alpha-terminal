@@ -1,7 +1,8 @@
 import IORedis from "ioredis";
 
-const redis = new IORedis(process.env.REDIS_URL ?? "redis://localhost:6379", { maxRetriesPerRequest: null });
 const channel = "ctp-alpha:events";
+const localSubscribers = new Set<(event: RealtimeEvent) => void>();
+let redis: IORedis | null = null;
 
 export type RealtimeEvent = {
   type: string;
@@ -10,15 +11,58 @@ export type RealtimeEvent = {
   data: unknown;
 };
 
+function getRedis() {
+  if (redis) return redis;
+  const client = new IORedis(process.env.REDIS_URL ?? "redis://localhost:6379", {
+    maxRetriesPerRequest: 1,
+    lazyConnect: true,
+    enableOfflineQueue: false,
+  });
+  client.on("error", () => {});
+  redis = client;
+  return client;
+}
+
 export async function publishRealtime(event: RealtimeEvent) {
-  await redis.publish(channel, JSON.stringify(event));
+  for (const subscriber of localSubscribers) {
+    try { subscriber(event); } catch {}
+  }
+
+  try {
+    const client = getRedis();
+    if (client.status === "wait") await client.connect();
+    if (client.status === "ready") await client.publish(channel, JSON.stringify(event));
+  } catch {
+    // Realtime remains available through the local process when Redis is unavailable.
+  }
 }
 
 export async function subscribeRealtime(onEvent: (event: RealtimeEvent) => void) {
-  const subscriber = new IORedis(process.env.REDIS_URL ?? "redis://localhost:6379", { maxRetriesPerRequest: null });
-  await subscriber.subscribe(channel);
-  subscriber.on("message", (_channel, message) => {
-    try { onEvent(JSON.parse(message) as RealtimeEvent); } catch {}
-  });
-  return async () => { await subscriber.unsubscribe(channel); await subscriber.quit(); };
+  localSubscribers.add(onEvent);
+
+  let subscriber: IORedis | null = null;
+  try {
+    subscriber = new IORedis(process.env.REDIS_URL ?? "redis://localhost:6379", {
+      maxRetriesPerRequest: 1,
+      lazyConnect: true,
+      enableOfflineQueue: false,
+    });
+    subscriber.on("error", () => {});
+    await subscriber.connect();
+    await subscriber.subscribe(channel);
+    subscriber.on("message", (_channel, message) => {
+      try { onEvent(JSON.parse(message) as RealtimeEvent); } catch {}
+    });
+  } catch {
+    await subscriber?.quit().catch(() => {});
+    subscriber = null;
+  }
+
+  return async () => {
+    localSubscribers.delete(onEvent);
+    if (subscriber) {
+      await subscriber.unsubscribe(channel).catch(() => {});
+      await subscriber.quit().catch(() => {});
+    }
+  };
 }
