@@ -10,7 +10,6 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,
-  Database,
   FileText,
   Gauge,
   LayoutDashboard,
@@ -165,7 +164,7 @@ export default function DashboardPage() {
         </div>
       </aside>
 
-      <div className={collapsed ? "lg:pl-[76px]" : "lg:pl-[260px"]}>
+      <div className={collapsed ? "lg:pl-[76px]" : "lg:pl-[260px]"}>
         <header className="sticky top-0 z-30 border-b border-white/10 bg-[#05070b]/90 px-4 py-3 backdrop-blur sm:px-6">
           <div className="flex min-h-10 items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
