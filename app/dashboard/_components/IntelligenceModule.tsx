@@ -543,6 +543,110 @@ function SettingsModule({ intel }: { intel: IntelResponse | null }) {
   </div>;
 }
 
+function AlertsModule() {
+  const [settings, setSettings] = useState({
+    telegramEnabled: false, telegramConfigured: false, telegramBotToken: "", telegramChatId: "",
+    priceAlerts: true, newsAlerts: true, walletAlerts: true, launchAlerts: true, riskAlerts: true, macroAlerts: true, realtime: true,
+  });
+  const [events, setEvents] = useState<Array<{id:string;type:string;title:string;message:string;severity:string;sentTelegram:boolean;createdAt:string}>>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    try {
+      const response = await fetch("/api/alerts", { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to load alert settings");
+      setSettings(v => ({ ...v, ...data.settings }));
+      setEvents(data.events ?? []);
+    } catch (e) { setError(e instanceof Error ? e.message : "Failed to load alerts"); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { void load(); const timer = window.setInterval(() => void load(), 10000); return () => window.clearInterval(timer); }, [load]);
+
+  const save = async () => {
+    setSaving(true); setNotice(""); setError("");
+    try {
+      const response = await fetch("/api/alerts", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(settings) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to save");
+      setSettings(v => ({ ...v, telegramConfigured: Boolean(data.telegramConfigured), telegramBotToken: "" }));
+      setNotice("Alert settings tersimpan per user.");
+    } catch (e) { setError(e instanceof Error ? e.message : "Failed to save"); }
+    finally { setSaving(false); }
+  };
+
+  const testTelegram = async () => {
+    setTesting(true); setNotice(""); setError("");
+    try {
+      const response = await fetch("/api/alerts", { method: "PUT" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Telegram test failed");
+      setNotice("Test notification Telegram berhasil dikirim.");
+    } catch (e) { setError(e instanceof Error ? e.message : "Telegram test failed"); }
+    finally { setTesting(false); }
+  };
+
+  const toggle = (key: "priceAlerts"|"newsAlerts"|"walletAlerts"|"launchAlerts"|"riskAlerts"|"macroAlerts"|"realtime") =>
+    setSettings(v => ({ ...v, [key]: !v[key] }));
+
+  if (loading) return <div className="rounded-2xl border border-white/10 bg-[#080b11] p-6 text-sm text-slate-500">Loading alert configuration…</div>;
+
+  return <div className="space-y-5">
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <Kpi label="Telegram" value={settings.telegramConfigured ? "CONFIGURED" : "NOT SET"} detail={settings.telegramEnabled ? "notifications enabled" : "notifications disabled"} />
+      <Kpi label="Realtime" value={settings.realtime ? "ON" : "OFF"} detail="10s dashboard sync" />
+      <Kpi label="Events" value={String(events.length)} detail="stored for this account" />
+      <Kpi label="Delivery" value={events.filter(e => e.sentTelegram).length + "/" + events.length} detail="Telegram sent" />
+    </div>
+
+    <Section title="Telegram Bot">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div>
+          <label className="text-xs text-slate-500">Bot Token
+            <input type="password" value={settings.telegramBotToken} onChange={e=>setSettings(v=>({...v,telegramBotToken:e.target.value}))} placeholder={settings.telegramConfigured ? "Token tersimpan — isi hanya jika ingin mengganti" : "123456789:AA..."} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-white outline-none focus:border-cyan-400/40" autoComplete="new-password" />
+          </label>
+          <p className="mt-2 text-[10px] leading-5 text-slate-600">Token hanya dikirim ke server dan disimpan terenkripsi. Tidak dikirim kembali ke browser.</p>
+        </div>
+        <div>
+          <label className="text-xs text-slate-500">Chat ID
+            <input value={settings.telegramChatId} onChange={e=>setSettings(v=>({...v,telegramChatId:e.target.value}))} placeholder="-1001234567890" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-white outline-none focus:border-cyan-400/40" />
+          </label>
+          <p className="mt-2 text-[10px] leading-5 text-slate-600">Gunakan chat ID personal, group, atau channel yang dapat menerima pesan bot.</p>
+        </div>
+      </div>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <label className="flex items-center gap-2 rounded-xl border border-white/5 bg-white/[.02] px-3 py-2.5 text-xs text-slate-300"><input type="checkbox" checked={settings.telegramEnabled} onChange={e=>setSettings(v=>({...v,telegramEnabled:e.target.checked}))} className="accent-cyan-300"/> Enable Telegram</label>
+        <button onClick={()=>void save()} disabled={saving} className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-bold text-slate-950 disabled:opacity-40">{saving ? "Saving…" : "Save Telegram"}</button>
+        <button onClick={()=>void testTelegram()} disabled={testing || !settings.telegramConfigured} className="rounded-xl border border-cyan-400/20 px-4 py-2.5 text-xs font-semibold text-cyan-300 disabled:opacity-30">{testing ? "Testing…" : "Send Test"}</button>
+      </div>
+    </Section>
+
+    <Section title="Alert Types">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {([
+          ["priceAlerts","Price Alerts","Harga menembus threshold"],
+          ["newsAlerts","News / Catalyst","Headline & narrative shift"],
+          ["walletAlerts","Wallet Intel","Smart money / whale activity"],
+          ["launchAlerts","Launch Radar","Token/pair launch events"],
+          ["riskAlerts","Risk Engine","Risk / invalidation events"],
+          ["macroAlerts","Macro","CPI, FOMC, NFP, rates"],
+        ] as const).map(([key,label,detail]) => <label key={key} className="flex items-center gap-3 rounded-xl border border-white/5 bg-white/[.02] p-4 cursor-pointer"><input type="checkbox" checked={settings[key]} onChange={()=>toggle(key)} className="accent-cyan-300"/><span><span className="block text-sm text-slate-300">{label}</span><span className="mt-1 block text-[10px] text-slate-600">{detail}</span></span></label>)}
+      </div>
+      <label className="mt-3 flex items-center gap-3 rounded-xl border border-cyan-400/10 bg-cyan-400/[.03] p-4 text-xs text-slate-300"><input type="checkbox" checked={settings.realtime} onChange={()=>toggle("realtime")} className="accent-cyan-300"/> Realtime notification engine</label>
+    </Section>
+
+    <Section title="Alert History">
+      {events.length ? <div className="space-y-2">{events.map(event => <div key={event.id} className="rounded-xl border border-white/5 bg-white/[.02] p-3"><div className="flex flex-wrap items-center justify-between gap-2"><div className="text-sm font-semibold text-slate-300">{event.title}</div><span className="text-[10px] text-slate-600">{new Date(event.createdAt).toLocaleString()}</span></div><div className="mt-1 text-xs leading-5 text-slate-500">{event.message}</div><div className="mt-2 text-[9px] uppercase tracking-wider text-slate-600">{event.type} • {event.severity} • {event.sentTelegram ? "telegram sent" : "not sent"}</div></div>)}</div> : <EmptyState title="Belum ada alert" detail="Event yang dihasilkan engine akan disimpan khusus untuk akun ini."/>}
+    </Section>
+    {(notice || error) && <div className={"rounded-xl border p-3 text-xs " + (error ? "border-rose-400/10 bg-rose-400/[.03] text-rose-300" : "border-emerald-400/10 bg-emerald-400/[.03] text-emerald-300")}>{error || notice}</div>}
+  </div>;
+}
+
 function OperationalModule({ module, intel }: { module: ModuleKey; intel: IntelResponse | null }) {
   const [launches, setLaunches] = useState<Record<string, unknown> | null>(null);
   const [launchError, setLaunchError] = useState("");
@@ -581,6 +685,7 @@ function OperationalModule({ module, intel }: { module: ModuleKey; intel: IntelR
     alerts:{title:"Alert Rules",items:["Price threshold","Volume spike","Liquidity change","Wallet event","News keyword","Macro event"],note:"Rule engine dapat dipetakan ke Redis/BullMQ dan channel notification."},
   };
   if (module === "settings") return <SettingsModule intel={intel} />;
+  if (module === "alerts") return <AlertsModule />;
   const d=data[module]; if(!d) return null;
   return <div className="space-y-5"><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Kpi label="Module" value={meta[module].title}/><Kpi label="News Feed" value={intel ? "ONLINE":"OFFLINE"} detail={intel ? String(intel.news.length)+" stories":"no response"}/><Kpi label="Market Feed" value={intel?.markets.length ? "ONLINE":"NO DATA"} detail="CoinGecko"/><Kpi label="Refresh" value={intel ? Math.round(intel.refreshMs/1000)+"s":"—"}/></div><Section title={d.title}><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{d.items.map(x=><div key={x} className="rounded-xl border border-white/5 bg-white/[.02] p-4"><div className="text-sm text-slate-300">{x}</div><div className="mt-2 text-[10px] uppercase tracking-wider text-slate-600">data input</div></div>)}</div><div className="mt-4 rounded-xl border border-amber-400/10 bg-amber-400/[.03] p-4 text-xs leading-5 text-slate-500">{d.note}</div></Section>{module==="launches"&&<Section title="Live DEX Screener Feeds">{launchError&&<div className="mb-3 rounded-xl border border-rose-400/10 bg-rose-400/[.03] p-3 text-xs text-rose-300">{launchError}</div>}<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{["token-profiles/latest","token-profiles/recent","token-boosts/latest","token-boosts/top","ads/latest","community-takeovers/latest"].map(key=>{const value=launches?.[key];const count=Array.isArray(value)?value.length:(value&&typeof value==="object"&&Array.isArray((value as {pairs?:unknown[]}).pairs)?(value as {pairs:unknown[]}).pairs.length:0);return <div key={key} className="rounded-xl border border-white/5 bg-white/[.02] p-4"><div className="text-xs text-slate-400">{key}</div><div className="mt-2 text-xl font-bold text-slate-200">{launches?count:"—"}</div><div className="mt-1 text-[10px] uppercase tracking-wider text-slate-600">records</div></div>})}</div></Section>}</div>;
 }
