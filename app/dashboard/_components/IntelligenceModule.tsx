@@ -69,6 +69,46 @@ const meta: Record<ModuleKey, { eyebrow: string; title: string; description: str
   "trading-terminal": { eyebrow: "Execution Workspace", title: "Trading Terminal", description: "Workspace terpadu untuk chart, watchlist, market overview, economic calendar, alpha signal, dan live crypto news." },
 };
 
+function MarkdownResponse({ content }: { content: string }) {
+  const escapeHtml = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const inline = (value: string) => escapeHtml(value)
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/__(.+?)__/g, "<strong>$1</strong>")
+    .replace(/\*(.+?)\*/g, "<em>$1</em>")
+    .replace(/_(.+?)_/g, "<em>$1</em>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  const blocks: React.ReactNode[] = [];
+  let list: string[] = [];
+  let ordered = false;
+  const flushList = () => {
+    if (!list.length) return;
+    const Tag = ordered ? "ol" : "ul";
+    blocks.push(<Tag key={blocks.length} className={ordered ? "list-decimal" : "list-disc"} dangerouslySetInnerHTML={{ __html: list.map(item => "<li>" + inline(item) + "</li>").join("") }} />);
+    list = [];
+  };
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+    const unordered = /^[-*+]\s+/.test(trimmed);
+    const numbered = /^\d+[.)]\s+/.test(trimmed);
+    if (unordered || numbered) {
+      if (list.length && ordered !== numbered) flushList();
+      ordered = numbered;
+      list.push(trimmed.replace(/^(?:[-*+]\s+|\d+[.)]\s+)/, ""));
+      return;
+    }
+    flushList();
+    if (!trimmed) return;
+    if (trimmed.startsWith("### ")) blocks.push(<h4 key={blocks.length} className="mt-4 text-sm font-bold text-cyan-200">{trimmed.slice(4)}</h4>);
+    else if (trimmed.startsWith("## ")) blocks.push(<h3 key={blocks.length} className="mt-5 text-base font-bold text-white">{trimmed.slice(3)}</h3>);
+    else if (trimmed.startsWith("# ")) blocks.push(<h2 key={blocks.length} className="mt-5 text-lg font-black text-white">{trimmed.slice(2)}</h2>);
+    else if (/^>\s?/.test(trimmed)) blocks.push(<blockquote key={blocks.length} className="border-l-2 border-cyan-400/40 pl-3 text-slate-400">{trimmed.replace(/^>\s?/, "")}</blockquote>);
+    else blocks.push(<p key={blocks.length} className="leading-7" dangerouslySetInnerHTML={{ __html: inline(trimmed) }} />);
+  });
+  flushList();
+  return <div className="space-y-2 text-sm text-slate-300 [&_a]:text-cyan-300 [&_a]:underline [&_code]:rounded [&_code]:bg-white/10 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:text-cyan-200 [&_li]:ml-5 [&_li]:pl-1 [&_ol]:space-y-1 [&_ul]:space-y-1">{blocks}</div>;
+}
 function AIAssistantModule() {
   const [message,setMessage]=useState("");
   const [answer,setAnswer]=useState("");
@@ -176,7 +216,7 @@ function AIAssistantModule() {
     {(error||answer)&&<Section title="AI Response">
       {error
         ? <div className="rounded-xl border border-rose-400/10 bg-rose-400/[.03] p-4 text-sm leading-6 text-rose-300">{error}</div>
-        : <div className="whitespace-pre-wrap rounded-xl border border-white/5 bg-black/20 p-4 text-sm leading-7 text-slate-300">{answer}</div>}
+        : <div className="rounded-xl border border-white/5 bg-black/20 p-4 sm:p-5"><MarkdownResponse content={answer}/></div>}
     </Section>}
   </div>;
 }
