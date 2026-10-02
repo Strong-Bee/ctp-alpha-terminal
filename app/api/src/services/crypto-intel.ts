@@ -55,7 +55,7 @@ function tag(xml: string, name: string) {
 }
 
 function parseItems(xml: string, source: string): CryptoNewsItem[] {
-  return [...xml.matchAll(/<item(?:\\s[^>]*)?>([\\s\\S]*?)</item>/gi)]
+  return [...xml.matchAll(/<item(?:\s[^>]*)?>([\s\S]*?)<\/item>/gi)]
     .map((match) => {
       const item = match[1];
       const title = tag(item, "title");
@@ -63,6 +63,7 @@ function parseItems(xml: string, source: string): CryptoNewsItem[] {
       const summary = tag(item, "description");
       const published = tag(item, "pubDate") || tag(item, "published") || tag(item, "updated");
       if (!title || !url) return null;
+
       const lower = `${title} ${summary}`.toLowerCase();
       const category: CryptoNewsItem["category"] =
         /(hack|exploit|attack|stolen|breach|vulnerability)/.test(lower)
@@ -72,13 +73,16 @@ function parseItems(xml: string, source: string): CryptoNewsItem[] {
             : /(fed|fomc|cpi|inflation|rate|treasury|macro)/.test(lower)
               ? "macro"
               : "news";
+
       return {
         id: `${source}:${url}`,
         source,
         title,
         url,
         summary,
-        publishedAt: Number.isNaN(Date.parse(published)) ? new Date().toISOString() : new Date(published).toISOString(),
+        publishedAt: Number.isNaN(Date.parse(published))
+          ? new Date().toISOString()
+          : new Date(published).toISOString(),
         category,
       };
     })
@@ -88,6 +92,7 @@ function parseItems(xml: string, source: string): CryptoNewsItem[] {
 async function fetchText(url: string) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
+
   try {
     const response = await fetch(url, {
       headers: {
@@ -96,6 +101,7 @@ async function fetchText(url: string) {
       },
       signal: controller.signal,
     });
+
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.text();
   } finally {
@@ -106,9 +112,16 @@ async function fetchText(url: string) {
 async function fetchMarkets(): Promise<MarketItem[]> {
   const response = await fetch(
     "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=20&page=1&sparkline=false&price_change_percentage=24h",
-    { headers: { Accept: "application/json", "User-Agent": "CTP-Alpha-Terminal/1.0" } },
+    {
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "CTP-Alpha-Terminal/1.0",
+      },
+    },
   );
+
   if (!response.ok) throw new Error(`CoinGecko HTTP ${response.status}`);
+
   const data = (await response.json()) as Array<Record<string, unknown>>;
   return data.map((coin) => ({
     id: String(coin.id),
@@ -125,10 +138,12 @@ export async function getCryptoIntel(force = false) {
   const fresh = Date.now() - cache.at < env.NEWS_REFRESH_MS;
   if (!force && fresh && cache.news.length) return cache;
 
-  const results = await Promise.allSettled(FEEDS.map(async (feed) => {
-    const xml = await fetchText(feed.url);
-    return parseItems(xml, feed.name);
-  }));
+  const results = await Promise.allSettled(
+    FEEDS.map(async (feed) => {
+      const xml = await fetchText(feed.url);
+      return parseItems(xml, feed.name);
+    }),
+  );
 
   const dedup = new Map<string, CryptoNewsItem>();
   for (const result of results) {
@@ -154,8 +169,9 @@ export async function getCryptoIntel(force = false) {
 export function newsToAiContext(items: CryptoNewsItem[], maxItems = 20) {
   return items
     .slice(0, maxItems)
-    .map((item, index) =>
-      `[${index + 1}] ${item.source} | ${item.publishedAt} | ${item.category}\n${item.title}\n${item.summary.slice(0, 500)}\nURL: ${item.url}`,
+    .map(
+      (item, index) =>
+        `[${index + 1}] ${item.source} | ${item.publishedAt} | ${item.category}\n${item.title}\n${item.summary.slice(0, 500)}\nURL: ${item.url}`,
     )
     .join("\n\n");
 }
