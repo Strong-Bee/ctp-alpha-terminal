@@ -40,7 +40,7 @@
     "typescript": "^5"
   },
   "workspaces": [
-    "api",
+    "app/api",
     "worker",
     "packages/*"
   ]
