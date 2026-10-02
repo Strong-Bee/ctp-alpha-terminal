@@ -73,24 +73,113 @@ function AIAssistantModule() {
   const [message,setMessage]=useState("");
   const [answer,setAnswer]=useState("");
   const [loading,setLoading]=useState(false);
+  const [saving,setSaving]=useState(false);
+  const [testing,setTesting]=useState(false);
   const [error,setError]=useState("");
-  const [health,setHealth]=useState<{configured:boolean;model:string}|null>(null);
-  useEffect(()=>{fetch("/api/v1/ai/health",{cache:"no-store"}).then(r=>r.json()).then(setHealth).catch(()=>{});},[]);
+  const [notice,setNotice]=useState("");
+  const [settings,setSettings]=useState({
+    provider:"nvidia", baseUrl:"https://integrate.api.nvidia.com/v1", model:"nvidia/nemotron-3-ultra-550b-a55b",
+    apiKey:"", apiKeyConfigured:false, enableThinking:true, reasoningEffort:"medium", temperature:0.15, maxTokens:4096,
+  });
+
+  const loadSettings=useCallback(async()=>{
+    try{
+      const r=await fetch("/api/ai/config",{cache:"no-store"});
+      const data=await r.json();
+      if(!r.ok) throw new Error(data.error||"Failed to load AI settings");
+      setSettings(v=>({...v,...data.settings}));
+    }catch(e){setError(e instanceof Error?e.message:"Failed to load AI settings");}
+  },[]);
+  useEffect(()=>{void loadSettings();},[loadSettings]);
+
+  const saveSettings=async()=>{
+    setSaving(true);setError("");setNotice("");
+    try{
+      const r=await fetch("/api/ai/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(settings)});
+      const data=await r.json();
+      if(!r.ok) throw new Error(data.error||"Failed to save AI settings");
+      setSettings(v=>({...v,apiKey:"",apiKeyConfigured:Boolean(data.apiKeyConfigured)}));
+      setNotice("AI model settings tersimpan untuk akun ini.");
+    }catch(e){setError(e instanceof Error?e.message:"Failed to save AI settings");}
+    finally{setSaving(false);}
+  };
+
   const send=async()=>{
     if(!message.trim()||loading)return;
-    setLoading(true);setError("");
+    setLoading(true);setError("");setNotice("");
     try{
-      const r=await fetch("/api/v1/ai/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message,includeLiveNews:true,reasoningEffort:"medium"})});
+      const r=await fetch("/api/ai/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message})});
       const data=await r.json();
-      if(!r.ok) throw new Error(data.message||data.error||"AI request failed");
+      if(!r.ok) throw new Error(data.error||"AI request failed");
       setAnswer(data.answer||"AI returned an empty answer");
     }catch(e){setError(e instanceof Error?e.message:"AI request failed");}
     finally{setLoading(false);}
   };
+
+  const testModel=async()=>{
+    setTesting(true);setError("");setNotice("");
+    try{
+      const r=await fetch("/api/ai/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:"Reply with exactly: CTP AI connection OK"})});
+      const data=await r.json();
+      if(!r.ok) throw new Error(data.error||"Connection test failed");
+      setAnswer(data.answer||"Connection successful");
+      setNotice("Model connection berhasil.");
+    }catch(e){setError(e instanceof Error?e.message:"Connection test failed");}
+    finally{setTesting(false);}
+  };
+
   return <div className="space-y-5">
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"><Kpi label="Provider" value="NVIDIA NIM"/><Kpi label="Model" value={health?.model?.split("/").pop()||"Nemotron Ultra"}/><Kpi label="Status" value={health?.configured?"READY":"API KEY REQUIRED"} detail={health?.configured?"API configured":"Set NVIDIA_API_KEY in app/api/.env"}/></div>
-    <Section title="CTP Alpha AI"><div className="rounded-2xl border border-cyan-400/10 bg-cyan-400/[.025] p-4 sm:p-6"><div className="mb-4 text-sm text-slate-400">Ask the intelligence engine about market structure, narratives, risk, on-chain evidence, or supplied terminal context.</div><textarea value={message} onChange={e=>setMessage(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();void send();}}} placeholder="Contoh: Analisis BTC berdasarkan news dan market data saat ini..." className="min-h-32 w-full resize-y rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-white outline-none placeholder:text-slate-700 focus:border-cyan-400/30"/><div className="mt-3 flex flex-wrap items-center justify-between gap-3"><span className="text-[10px] text-slate-600">Enter untuk kirim • Shift+Enter untuk baris baru</span><button disabled={loading||!message.trim()||health?.configured===false} onClick={()=>void send()} className="rounded-xl bg-cyan-400 px-4 py-2.5 text-sm font-bold text-black disabled:cursor-not-allowed disabled:opacity-40">{loading?"Analyzing…":"Ask Alpha AI"}</button></div></div></Section>
-    {(error||answer)&&<Section title="AI Response">{error?<div className="rounded-xl border border-rose-400/10 bg-rose-400/[.03] p-4 text-sm leading-6 text-rose-300">{error}</div>:<div className="whitespace-pre-wrap rounded-xl border border-white/5 bg-black/20 p-4 text-sm leading-7 text-slate-300">{answer}</div>}</Section>}
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <Kpi label="Provider" value={settings.provider.toUpperCase()}/>
+      <Kpi label="Model" value={settings.model.split("/").pop()||settings.model}/>
+      <Kpi label="API Key" value={settings.apiKeyConfigured?"CONFIGURED":"REQUIRED"} detail="stored server-side"/>
+      <Kpi label="Reasoning" value={settings.reasoningEffort.toUpperCase()}/>
+    </div>
+
+    <Section title="AI Model Settings">
+      <div className="grid gap-4 md:grid-cols-2">
+        <label className="text-xs text-slate-500">Provider
+          <select value={settings.provider} onChange={e=>setSettings(v=>({...v,provider:e.target.value}))} className="mt-2 w-full rounded-xl border border-white/10 bg-[#0a0e15] px-3 py-3 text-sm text-white outline-none focus:border-cyan-400/30">
+            <option value="nvidia">NVIDIA NIM</option><option value="openai">OpenAI-compatible</option><option value="openrouter">OpenRouter</option><option value="custom">Custom OpenAI-compatible</option>
+          </select>
+        </label>
+        <label className="text-xs text-slate-500">Model
+          <input value={settings.model} onChange={e=>setSettings(v=>({...v,model:e.target.value}))} placeholder="nvidia/nemotron-3-ultra-550b-a55b" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-white outline-none focus:border-cyan-400/30"/>
+        </label>
+        <label className="text-xs text-slate-500 md:col-span-2">Base URL
+          <input value={settings.baseUrl} onChange={e=>setSettings(v=>({...v,baseUrl:e.target.value}))} placeholder="https://integrate.api.nvidia.com/v1" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-white outline-none focus:border-cyan-400/30"/>
+        </label>
+        <label className="text-xs text-slate-500 md:col-span-2">API Key
+          <input type="password" value={settings.apiKey} onChange={e=>setSettings(v=>({...v,apiKey:e.target.value}))} placeholder={settings.apiKeyConfigured?"Key tersimpan — isi hanya untuk mengganti":"Masukkan API key"} autoComplete="new-password" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-white outline-none focus:border-cyan-400/30"/>
+          <span className="mt-2 block text-[10px] text-slate-600">API key dienkripsi dan disimpan server-side per akun. Tidak dikirim kembali ke browser.</span>
+        </label>
+        <label className="text-xs text-slate-500">Reasoning
+          <select value={settings.reasoningEffort} onChange={e=>setSettings(v=>({...v,reasoningEffort:e.target.value}))} className="mt-2 w-full rounded-xl border border-white/10 bg-[#0a0e15] px-3 py-3 text-sm text-white">
+            <option value="none">None</option><option value="medium">Medium</option><option value="high">High</option>
+          </select>
+        </label>
+        <label className="text-xs text-slate-500">Temperature
+          <input type="number" min="0" max="1" step="0.05" value={settings.temperature} onChange={e=>setSettings(v=>({...v,temperature:Number(e.target.value)}))} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-white"/>
+        </label>
+        <label className="text-xs text-slate-500">Max Tokens
+          <input type="number" min="64" max="32768" step="256" value={settings.maxTokens} onChange={e=>setSettings(v=>({...v,maxTokens:Number(e.target.value)}))} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-white"/>
+        </label>
+        <label className="flex items-center gap-2 text-xs text-slate-400"><input type="checkbox" checked={settings.enableThinking} onChange={e=>setSettings(v=>({...v,enableThinking:e.target.checked}))} className="accent-cyan-300"/> Enable thinking</label>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-3">
+        <button onClick={()=>void saveSettings()} disabled={saving} className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-bold text-slate-950 disabled:opacity-40">{saving?"Saving…":"Save AI Settings"}</button>
+        <button onClick={()=>void testModel()} disabled={testing || !settings.apiKeyConfigured} className="rounded-xl border border-cyan-400/20 px-4 py-2.5 text-xs font-semibold text-cyan-300 disabled:opacity-30">{testing?"Testing…":"Test Model"}</button>
+      </div>
+    </Section>
+
+    <Section title="CTP Alpha AI">
+      <div className="rounded-2xl border border-cyan-400/10 bg-cyan-400/[.025] p-4 sm:p-6">
+        <div className="mb-4 text-sm text-slate-400">Model dapat diganti langsung dari dashboard. Setting disimpan per akun dan tidak perlu mengubah ENV setiap kali mengganti model.</div>
+        <textarea value={message} onChange={e=>setMessage(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();void send();}}} placeholder="Contoh: Analisis BTC berdasarkan news dan market data saat ini..." className="min-h-32 w-full resize-y rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-white outline-none placeholder:text-slate-700 focus:border-cyan-400/30"/>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><span className="text-[10px] text-slate-600">Enter untuk kirim • Shift+Enter untuk baris baru</span><button disabled={loading||!message.trim()||!settings.apiKeyConfigured} onClick={()=>void send()} className="rounded-xl bg-cyan-400 px-4 py-2.5 text-sm font-bold text-black disabled:cursor-not-allowed disabled:opacity-40">{loading?"Analyzing…":"Ask Alpha AI"}</button></div>
+      </div>
+    </Section>
+    {(error||answer||notice)&&<Section title="AI Response">{error?<div className="rounded-xl border border-rose-400/10 bg-rose-400/[.03] p-4 text-sm leading-6 text-rose-300">{error}</div>:notice?<div className="rounded-xl border border-emerald-400/10 bg-emerald-400/[.03] p-4 text-sm text-emerald-300">{notice}</div>:<div className="whitespace-pre-wrap rounded-xl border border-white/5 bg-black/20 p-4 text-sm leading-7 text-slate-300">{answer}</div>}</Section>}
   </div>;
 }
 const formatUsd = (value: number) => {
