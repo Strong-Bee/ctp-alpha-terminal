@@ -4,7 +4,7 @@ import Link from "next/link";
 import {
   Activity, BarChart3, Bell, BrainCircuit, CircleDollarSign, FileText, Gauge,
   LayoutDashboard, Moon, Network, Newspaper, Settings, ShieldAlert, Sparkles,
-  Target, TrendingUp, Wallet, RefreshCw, Clock3, AlertTriangle, ExternalLink, UserCircle, ChevronDown, LogOut, Menu, X
+  Target, TrendingUp, Wallet, RefreshCw, Clock3, AlertTriangle, ExternalLink, UserCircle, ChevronDown, LogOut, Menu, X, MessageSquare, Trash2, Plus
 } from "lucide-react";
  import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { signOut, useSession } from "next-auth/react";
@@ -108,6 +108,12 @@ function MarkdownResponse({ content }: { content: string }) {
   return <div className="space-y-2 text-sm text-slate-300 [&_a]:text-cyan-300 [&_a]:underline [&_code]:rounded [&_code]:bg-white/10 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:text-cyan-200 [&_li]:ml-5 [&_li]:pl-1 [&_ol]:space-y-1 [&_ul]:space-y-1">{blocks}</div>;
 }
 function AIAssistantModule() {
+  type ChatMessage = { role: "user" | "assistant"; content: string };
+  type ChatHistory = {
+    id: string; title: string; messages: ChatMessage[]; model?: string | null;
+    deepSearch: boolean; createdAt: string; updatedAt: string;
+  };
+
   const [message,setMessage]=useState("");
   const [answer,setAnswer]=useState("");
   const [loading,setLoading]=useState(false);
@@ -117,6 +123,9 @@ function AIAssistantModule() {
   const [modelsLoading,setModelsLoading]=useState(true);
   const [deepSearch,setDeepSearch]=useState(false);
   const [sources,setSources]=useState<Array<{id:number;title:string;url:string}>>([]);
+  const [history,setHistory]=useState<ChatHistory[]>([]);
+  const [historyLoading,setHistoryLoading]=useState(true);
+  const [activeChatId,setActiveChatId]=useState<string | null>(null);
 
   const parseJsonResponse = async (response: Response): Promise<Record<string, any>> => {
     const raw = await response.text();
@@ -143,10 +152,45 @@ function AIAssistantModule() {
     }
   },[model]);
 
+  const loadHistory=useCallback(async()=>{
+    setHistoryLoading(true);
+    try{
+      const r=await fetch("/api/ai/history",{cache:"no-store",credentials:"same-origin",headers:{Accept:"application/json"}});
+      const data=await parseJsonResponse(r);
+      if(!r.ok) throw new Error(data.error||"Failed to load chat history");
+      setHistory(Array.isArray(data.chats) ? data.chats : []);
+    }catch(e){
+      setError(e instanceof Error?e.message:"Failed to load chat history");
+    }finally{
+      setHistoryLoading(false);
+    }
+  },[]);
+
   useEffect(()=>{void loadModels();},[loadModels]);
+  useEffect(()=>{void loadHistory();},[loadHistory]);
+
+  const saveHistory=async(messages:ChatMessage[], existingId?:string|null)=>{
+    const firstUser=messages.find(item=>item.role==="user");
+    const title=(firstUser?.content || "AI Chat").replace(/\s+/g," ").trim().slice(0,80) || "AI Chat";
+    const r=await fetch("/api/ai/history",{
+      method:"POST",credentials:"same-origin",cache:"no-store",
+      headers:{"Content-Type":"application/json","Accept":"application/json"},
+      body:JSON.stringify({id:existingId || undefined,title,messages,model,deepSearch}),
+    });
+    const data=await parseJsonResponse(r);
+    if(!r.ok) throw new Error(data.error||"Failed to save chat history");
+    if(data.chat){
+      setHistory(current=>{
+        const next=current.filter(item=>item.id!==data.chat.id);
+        return [data.chat,...next].slice(0,50);
+      });
+      setActiveChatId(data.chat.id);
+    }
+  };
 
   const send=async()=>{
     if(!message.trim()||loading)return;
+    const userMessage=message.trim();
     setLoading(true);
     setError("");
     setSources([]);
@@ -157,12 +201,20 @@ function AIAssistantModule() {
         credentials:"same-origin",
         cache:"no-store",
         headers:{"Content-Type":"application/json","Accept":"application/json"},
-        body:JSON.stringify({message,model}),
+        body:JSON.stringify({message:userMessage,model}),
       });
       const data=await parseJsonResponse(r);
       if(!r.ok) throw new Error(data.error||"AI request failed");
-      setAnswer(data.answer||"AI returned an empty answer");
+      const nextAnswer=data.answer||"AI returned an empty answer";
+      const nextMessages: ChatMessage[] = [
+        ...(activeChatId ? (history.find(item=>item.id===activeChatId)?.messages || []) : []),
+        {role:"user",content:userMessage},
+        {role:"assistant",content:nextAnswer},
+      ];
+      setMessage("");
+      setAnswer(nextAnswer);
       if (Array.isArray(data.sources)) setSources(data.sources);
+      await saveHistory(nextMessages,activeChatId);
     }catch(e){
       setError(e instanceof Error?e.message:"AI request failed");
     }finally{
@@ -170,81 +222,94 @@ function AIAssistantModule() {
     }
   };
 
+  const openChat=(chat:ChatHistory)=>{
+    const lastAssistant=[...chat.messages].reverse().find(item=>item.role==="assistant");
+    const lastUser=[...chat.messages].reverse().find(item=>item.role==="user");
+    setActiveChatId(chat.id);
+    setAnswer(lastAssistant?.content || "");
+    setMessage(lastUser?.content || "");
+    setModel(chat.model || model);
+    setDeepSearch(chat.deepSearch);
+    setSources([]);
+    setError("");
+  };
+
+  const newChat=()=>{
+    setActiveChatId(null);
+    setMessage("");
+    setAnswer("");
+    setSources([]);
+    setError("");
+  };
+
+  const deleteChat=async(id:string)=>{
+    try{
+      const r=await fetch("/api/ai/history",{method:"DELETE",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})});
+      const data=await parseJsonResponse(r);
+      if(!r.ok) throw new Error(data.error||"Failed to delete chat");
+      setHistory(current=>current.filter(item=>item.id!==id));
+      if(activeChatId===id) newChat();
+    }catch(e){
+      setError(e instanceof Error?e.message:"Failed to delete chat");
+    }
+  };
+
   return <div className="space-y-5">
-    <Section title="NVIDIA AI Assistant">
-      <div className="space-y-4">
-        <div>
-          <label className="text-xs text-slate-500">NVIDIA Model</label>
-          <select
-            value={model}
-            onChange={e=>setModel(e.target.value)}
-            disabled={modelsLoading || !models.length}
-            className="mt-2 w-full rounded-xl border border-white/10 bg-[#0a0e15] px-3 py-3 text-sm text-slate-200 outline-none focus:border-cyan-400/30 disabled:opacity-50"
-          >
-            {modelsLoading
-              ? <option>Loading NVIDIA models…</option>
-              : models.length
-                ? models.map(id=><option key={id} value={id}>{id}</option>)
-                : <option>No NVIDIA models available</option>}
-          </select>
-          <div className="mt-2 flex items-center justify-between text-[10px] text-slate-600">
-            <span>{models.length ? models.length+" NVIDIA models available" : "NVIDIA model list unavailable"}</span>
-            <button type="button" onClick={()=>void loadModels()} className="text-cyan-300 hover:text-cyan-200">Refresh models</button>
+    <div className="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
+      <Section title="Chat History">
+        <div className="mb-3">
+          <button type="button" onClick={newChat} className="flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-400/20 bg-cyan-400/[.06] px-3 py-2.5 text-xs font-semibold text-cyan-200 hover:bg-cyan-400/[.1]">
+            <Plus size={14}/> New Chat
+          </button>
+        </div>
+        <div className="max-h-[520px] space-y-1.5 overflow-y-auto pr-1">
+          {historyLoading ? <div className="p-3 text-xs text-slate-600">Loading history…</div> :
+            history.length ? history.map(chat=><div key={chat.id} className={"group flex items-center gap-1 rounded-xl border px-2 py-1.5 " + (activeChatId===chat.id ? "border-cyan-400/20 bg-cyan-400/[.06]" : "border-transparent hover:border-white/5 hover:bg-white/[.02]")}>
+              <button type="button" onClick={()=>openChat(chat)} className="min-w-0 flex-1 px-1.5 py-1 text-left">
+                <div className="flex items-center gap-2"><MessageSquare size={13} className="shrink-0 text-cyan-300/60"/><span className="truncate text-xs text-slate-300">{chat.title}</span></div>
+                <div className="mt-1 text-[9px] text-slate-600">{relativeTime(chat.updatedAt)} • {chat.messages.length} messages</div>
+              </button>
+              <button type="button" onClick={()=>void deleteChat(chat.id)} className="rounded-lg p-2 text-slate-700 opacity-0 transition hover:bg-rose-400/10 hover:text-rose-300 group-hover:opacity-100" aria-label={"Delete " + chat.title}><Trash2 size={13}/></button>
+            </div>) :
+            <div className="rounded-xl border border-dashed border-white/10 p-4 text-center text-xs text-slate-600">Belum ada riwayat chat.</div>}
+        </div>
+      </Section>
+
+      <div className="space-y-5">
+        <Section title="NVIDIA AI Assistant">
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs text-slate-500">NVIDIA Model</label>
+              <select value={model} onChange={e=>setModel(e.target.value)} disabled={modelsLoading || !models.length} className="mt-2 w-full rounded-xl border border-white/10 bg-[#0a0e15] px-3 py-3 text-sm text-slate-200 outline-none focus:border-cyan-400/30 disabled:opacity-50">
+                {modelsLoading ? <option>Loading NVIDIA models…</option> : models.length ? models.map(id=><option key={id} value={id}>{id}</option>) : <option>No NVIDIA models available</option>}
+              </select>
+              <div className="mt-2 flex items-center justify-between text-[10px] text-slate-600"><span>{models.length ? models.length+" NVIDIA models available" : "NVIDIA model list unavailable"}</span><button type="button" onClick={()=>void loadModels()} className="text-cyan-300 hover:text-cyan-200">Refresh models</button></div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cyan-400/10 bg-cyan-400/[.03] px-3 py-2.5">
+              <label className="flex cursor-pointer items-center gap-3 text-xs text-slate-300"><input type="checkbox" checked={deepSearch} onChange={e=>setDeepSearch(e.target.checked)} className="accent-cyan-300"/><span><span className="block font-semibold text-cyan-200">Deep Search</span><span className="block text-[10px] text-slate-600">Riset multi-source + sintesis NVIDIA dengan citations</span></span></label>
+              {deepSearch && <span className="rounded-full border border-cyan-400/15 px-2 py-1 text-[9px] uppercase tracking-wider text-cyan-300/70">Web Research</span>}
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-3 sm:p-4">
+              <textarea value={message} onChange={e=>setMessage(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();void send();}}} placeholder="Tanyakan apa saja kepada NVIDIA AI..." className="min-h-40 w-full resize-y bg-transparent p-2 text-sm text-white outline-none placeholder:text-slate-700"/>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-white/5 pt-3"><span className="text-[10px] text-slate-600">Enter untuk kirim • Shift+Enter untuk baris baru</span><button type="button" disabled={loading||!message.trim()||!model} onClick={()=>void send()} className="rounded-xl bg-cyan-400 px-5 py-2.5 text-sm font-bold text-black disabled:cursor-not-allowed disabled:opacity-40">{loading?(deepSearch?"Researching…":"Thinking…"):"Send"}</button></div>
+            </div>
           </div>
-        </div>
+        </Section>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cyan-400/10 bg-cyan-400/[.03] px-3 py-2.5">
-          <label className="flex cursor-pointer items-center gap-3 text-xs text-slate-300">
-            <input type="checkbox" checked={deepSearch} onChange={e=>setDeepSearch(e.target.checked)} className="accent-cyan-300"/>
-            <span>
-              <span className="block font-semibold text-cyan-200">Deep Search</span>
-              <span className="block text-[10px] text-slate-600">Riset multi-source + sintesis NVIDIA dengan citations</span>
-            </span>
-          </label>
-          {deepSearch && <span className="rounded-full border border-cyan-400/15 px-2 py-1 text-[9px] uppercase tracking-wider text-cyan-300/70">Web Research</span>}
-        </div>
-
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-3 sm:p-4">
-          <textarea
-            value={message}
-            onChange={e=>setMessage(e.target.value)}
-            onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();void send();}}}
-            placeholder="Tanyakan apa saja kepada NVIDIA AI..."
-            className="min-h-40 w-full resize-y bg-transparent p-2 text-sm text-white outline-none placeholder:text-slate-700"
-          />
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-white/5 pt-3">
-            <span className="text-[10px] text-slate-600">Enter untuk kirim • Shift+Enter untuk baris baru</span>
-            <button
-              type="button"
-              disabled={loading||!message.trim()||!model}
-              onClick={()=>void send()}
-              className="rounded-xl bg-cyan-400 px-5 py-2.5 text-sm font-bold text-black disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {loading?(deepSearch?"Researching…":"Thinking…"):"Send"}
-            </button>
-          </div>
-        </div>
-      </div>
-    </Section>
-
-    {(error||answer)&&<Section title={deepSearch ? "Deep Research Response" : "AI Response"}>
-      {error
-        ? <div className="rounded-xl border border-rose-400/10 bg-rose-400/[.03] p-4 text-sm leading-6 text-rose-300">{error}</div>
-        : <div className="space-y-4">
-            <div className="rounded-xl border border-white/5 bg-black/20 p-4 sm:p-5"><MarkdownResponse content={answer}/></div>
-            {deepSearch && sources.length > 0 && <div className="rounded-xl border border-white/5 bg-white/[.015] p-4">
-              <div className="mb-3 text-[10px] font-bold uppercase tracking-[.2em] text-slate-600">Research Sources ({sources.length})</div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {sources.map(source=><a key={source.id} href={source.url} target="_blank" rel="noopener noreferrer" className="rounded-xl border border-white/5 bg-black/20 p-3 transition hover:border-cyan-400/20 hover:bg-cyan-400/[.03]">
-                  <div className="text-xs font-semibold leading-5 text-slate-300">{source.id}. {source.title}</div>
-                  <div className="mt-1 truncate text-[10px] text-cyan-300/70">{source.url}</div>
-                </a>)}
-              </div>
+        {(error||answer)&&<Section title={deepSearch ? "Deep Research Response" : "AI Response"}>
+          {error ? <div className="rounded-xl border border-rose-400/10 bg-rose-400/[.03] p-4 text-sm leading-6 text-rose-300">{error}</div> :
+            <div className="space-y-4">
+              <div className="rounded-xl border border-white/5 bg-black/20 p-4 sm:p-5"><MarkdownResponse content={answer}/></div>
+              {deepSearch && sources.length > 0 && <div className="rounded-xl border border-white/5 bg-white/[.015] p-4"><div className="mb-3 text-[10px] font-bold uppercase tracking-[.2em] text-slate-600">Research Sources ({sources.length})</div><div className="grid gap-2 sm:grid-cols-2">{sources.map(source=><a key={source.id} href={source.url} target="_blank" rel="noopener noreferrer" className="rounded-xl border border-white/5 bg-black/20 p-3 transition hover:border-cyan-400/20 hover:bg-cyan-400/[.03]"><div className="text-xs font-semibold leading-5 text-slate-300">{source.id}. {source.title}</div><div className="mt-1 truncate text-[10px] text-cyan-300/70">{source.url}</div></a>)}</div></div>}
             </div>}
-          </div>}
-    </Section>}
+        </Section>}
+      </div>
+    </div>
   </div>;
 }
+
 const formatUsd = (value: number) => {
   if (!Number.isFinite(value)) return "—";
   if (Math.abs(value) >= 1e12) return "$" + (value / 1e12).toFixed(2) + "T";
