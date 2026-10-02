@@ -6,6 +6,7 @@ import pinoHttp from "pino-http";
 import { env } from "./config/env.js";
 import { aiRouter } from "./routes/ai.js";
 import { dashboardRouter } from "./routes/dashboard.js";
+import { dexRouter } from "./routes/dex.js";
 import { healthRouter } from "./routes/health.js";
 import { newsRouter } from "./routes/news.js";
 
@@ -35,5 +36,6 @@ app.get("/", (_req, res) => res.json({ name: "CTP Alpha Terminal API", version: 
 app.use("/health", healthRouter);
 app.use("/api/v1/ai", aiRouter);
 app.use("/api/v1/dashboard", dashboardRouter);
+app.use("/api/v1/dex", dexRouter);
 app.use("/api/v1/news", newsRouter);
 app.use((_req, res) => res.status(404).json({ error: "Not found" }));
