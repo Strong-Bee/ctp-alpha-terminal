@@ -82,10 +82,17 @@ function AIAssistantModule() {
     apiKey:"", apiKeyConfigured:false, enableThinking:true, reasoningEffort:"medium", temperature:0.15, maxTokens:4096,
   });
 
+  const parseJsonResponse = async (response: Response): Promise<Record<string, any>> => {
+    const raw = await response.text();
+    if (!raw.trim()) return {};
+    try { return JSON.parse(raw) as Record<string, any>; }
+    catch { throw new Error(`Server returned invalid JSON (HTTP ${response.status})`); }
+  };
+
   const loadSettings=useCallback(async()=>{
     try{
-      const r=await fetch("/api/ai/config",{cache:"no-store"});
-      const data=await r.json();
+      const r=await fetch("/api/ai/config",{cache:"no-store",credentials:"same-origin",headers:{Accept:"application/json"}});
+      const data=await parseJsonResponse(r);
       if(!r.ok) throw new Error(data.error||"Failed to load AI settings");
       setSettings(v=>({...v,...data.settings}));
     }catch(e){setError(e instanceof Error?e.message:"Failed to load AI settings");}
@@ -119,7 +126,7 @@ function AIAssistantModule() {
         body:JSON.stringify(payload),
         cache:"no-store",
       });
-      const data=await r.json().catch(()=>({}));
+      const data=await parseJsonResponse(r);
       if(!r.ok) throw new Error(data.error||("Save failed (HTTP "+r.status+")"));
       setSettings(v=>({...v,...(data.settings||{}),apiKey:"",apiKeyConfigured:Boolean(data.settings?.apiKeyConfigured ?? data.apiKeyConfigured)}));
       setNotice("AI model settings berhasil disimpan ke database untuk akun ini.");
@@ -131,8 +138,8 @@ function AIAssistantModule() {
     if(!message.trim()||loading)return;
     setLoading(true);setError("");setNotice("");
     try{
-      const r=await fetch("/api/ai/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message})});
-      const data=await r.json();
+      const r=await fetch("/api/ai/chat",{method:"POST",credentials:"same-origin",cache:"no-store",headers:{"Content-Type":"application/json"},body:JSON.stringify({message})});
+      const data=await parseJsonResponse(r);
       if(!r.ok) throw new Error(data.error||"AI request failed");
       setAnswer(data.answer||"AI returned an empty answer");
     }catch(e){setError(e instanceof Error?e.message:"AI request failed");}
@@ -142,8 +149,8 @@ function AIAssistantModule() {
   const testModel=async()=>{
     setTesting(true);setError("");setNotice("");
     try{
-      const r=await fetch("/api/ai/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:"Reply with exactly: CTP AI connection OK"})});
-      const data=await r.json();
+      const r=await fetch("/api/ai/chat",{method:"POST",credentials:"same-origin",cache:"no-store",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:"Reply with exactly: CTP AI connection OK"})});
+      const data=await parseJsonResponse(r);
       if(!r.ok) throw new Error(data.error||"Connection test failed");
       setAnswer(data.answer||"Connection successful");
       setNotice("Model connection berhasil.");
