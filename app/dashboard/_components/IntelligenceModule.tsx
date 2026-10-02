@@ -147,13 +147,17 @@ function AIAssistantModule() {
   };
 
   const testModel=async()=>{
-    setTesting(true);setError("");setNotice("");
+    if(testing)return;
+    setTesting(true);setError("");setNotice("");setAnswer("");
     try{
-      const r=await fetch("/api/ai/chat",{method:"POST",credentials:"same-origin",cache:"no-store",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:"Reply with exactly: CTP AI connection OK"})});
+      const r=await fetch("/api/ai/test",{method:"POST",credentials:"same-origin",cache:"no-store",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({
+        provider:settings.provider, baseUrl:settings.baseUrl.trim(), model:settings.model.trim(), apiKey:settings.apiKey.trim(),
+        reasoningEffort:settings.reasoningEffort, temperature:Number(settings.temperature), maxTokens:Number(settings.maxTokens), enableThinking:settings.enableThinking,
+      })});
       const data=await parseJsonResponse(r);
-      if(!r.ok) throw new Error(data.error||"Connection test failed");
-      setAnswer(data.answer||"Connection successful");
-      setNotice("Model connection berhasil.");
+      if(!r.ok) throw new Error(data.error||("Connection test failed (HTTP "+r.status+")"));
+      setAnswer(data.answer||"CTP AI connection OK");
+      setNotice("Model connection berhasil • "+String(data.latencyMs??"—")+" ms • "+String(data.model||settings.model));
     }catch(e){setError(e instanceof Error?e.message:"Connection test failed");}
     finally{setTesting(false);}
   };
@@ -198,7 +202,7 @@ function AIAssistantModule() {
       </div>
       <div className="mt-4 flex flex-wrap gap-3">
         <button type="button" onClick={()=>void saveSettings()} disabled={saving} className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-bold text-slate-950 disabled:opacity-40">{saving?"Saving…":"Save AI Settings"}</button>
-        <button type="button" onClick={()=>void testModel()} disabled={testing || !settings.apiKeyConfigured} className="rounded-xl border border-cyan-400/20 px-4 py-2.5 text-xs font-semibold text-cyan-300 disabled:opacity-30">{testing?"Testing…":"Test Model"}</button>
+        <button type="button" onClick={()=>void testModel()} disabled={testing || (!settings.apiKeyConfigured && !settings.apiKey.trim())} className="rounded-xl border border-cyan-400/20 px-4 py-2.5 text-xs font-semibold text-cyan-300 disabled:opacity-30">{testing?"Testing…":"Test Model"}</button>
       </div>
     </Section>
 
