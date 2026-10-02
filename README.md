@@ -12,7 +12,7 @@ Repository: https://github.com/Strong-Bee/ctp-alpha-terminal
 |---|---|
 | Trading Terminal | TradingView embedded chart, economic events, market workspace |
 | Overview | Market pulse, module health, alpha overview |
-| AI Assistant | AI research dengan NVIDIA NIM + self-hosted SearXNG Deep Search |
+| AI Assistant | AI research dengan NVIDIA NIM + SearX.space public SearXNG Deep Search |
 | Live News | Multi-source crypto news, refresh, deduplication |
 | Markets | Price, 24h change, market cap, volume, scanner |
 | Narratives | Narrative discovery dan catalyst context |
@@ -58,50 +58,53 @@ Framework ini adalah deterministic scoring framework awal dan dapat dikembangkan
 
 ## 4. AI Assistant
 
-AI Assistant dapat dikonfigurasi langsung dari Dashboard → AI Assistant → AI Model Settings. User tidak perlu mengubah ENV setiap kali mengganti model.
+AI Assistant menggunakan NVIDIA NIM melalui server-side ENV. API key tidak dikirim ke browser.
 
-Provider modes:
-- NVIDIA NIM
-- OpenAI-compatible
-- OpenRouter
-- Custom OpenAI-compatible
-
-Per-user configuration:
-- Provider
-- Base URL
-- Model
-- API Key
-- Enable Thinking
-- Reasoning Effort
-- Temperature
-- Max Tokens
-
-Default NVIDIA model: nvidia/nemotron-3-ultra-550b-a55b
-Default NVIDIA Base URL: https://integrate.api.nvidia.com/v1
-
-AI settings disimpan pada UserAISettings. API key dienkripsi server-side dan tidak dikembalikan ke browser.
+Default:
+- Provider: NVIDIA NIM
+- Model: `nvidia/nemotron-3-ultra-550b-a55b`
+- Base URL: `https://integrate.api.nvidia.com/v1`
 
 AI endpoints:
 - GET /api/ai/config
 - POST /api/ai/config
 - POST /api/ai/chat
-
-ENV tetap tersedia sebagai fallback:
-
-NVIDIA_API_KEY=
-NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
-NVIDIA_MODEL=nvidia/nemotron-3-ultra-550b-a55b
-NVIDIA_ENABLE_THINKING=true
-NVIDIA_TIMEOUT_MS=120000
-
-### Deep Search / SearXNG
-
-Deep Search menggunakan self-hosted SearXNG sebagai web research layer. CTP tidak membutuhkan Firecrawl API key.
+- GET /api/ai/models
+- POST /api/ai/test
+- POST /api/ai/deep-search
 
 Environment:
 
 ```env
-SEARXNG_URL=http://127.0.0.1:8080
+NVIDIA_API_KEY=
+NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
+NVIDIA_MODEL=nvidia/nemotron-3-ultra-550b-a55b
+NVIDIA_ENABLE_THINKING=true
+NVIDIA_REASONING_EFFORT=medium
+NVIDIA_TEMPERATURE=0.15
+NVIDIA_MAX_TOKENS=4096
+NVIDIA_TIMEOUT_MS=120000
+```
+
+### Deep Search / SearX.space
+
+Deep Search menggunakan public SearXNG instances yang terdaftar di SearX.space. CTP mengambil daftar instance dari:
+
+```text
+https://searx.space/data/instances.json
+```
+
+CTP tidak mengandalkan satu public instance. Untuk setiap research query, instance pool dipilih dan diputar dengan round-robin. Instance yang timeout, mengembalikan error, invalid JSON, atau tidak menghasilkan result diberi failure count dan sementara masuk cooldown. Request berikutnya otomatis mencoba instance sehat lain.
+
+Environment:
+
+```env
+SEARXNG_DISCOVERY_URL=https://searx.space/data/instances.json
+SEARXNG_INSTANCE_COUNT=8
+SEARXNG_TIMEOUT_MS=12000
+SEARXNG_DISCOVERY_TTL_MS=600000
+SEARXNG_FAILURE_COOLDOWN_MS=60000
+SEARXNG_MAX_FAILURES=2
 SEARXNG_LANGUAGE=en
 SEARXNG_CATEGORIES=general,news
 SEARXNG_SAFESEARCH=0
@@ -110,34 +113,13 @@ SEARXNG_PAGES=2
 SEARXNG_MAX_RESULTS=18
 ```
 
-SearXNG harus mengaktifkan JSON pada `search.formats`, karena Deep Search memanggil `/search?format=json`. SearXNG juga mendukung parameter `categories`, `pageno`, `language`, dan `time_range`.
+SearXNG JSON support tidak seragam pada public instances. Dokumentasi resmi SearXNG menyatakan bahwa `format=json` harus diaktifkan oleh administrator instance; karena itu failover merupakan bagian penting dari desain ini.
 
-Contoh konfigurasi:
+Deep Search menjalankan beberapa query dan halaman, mendistribusikan request ke public instances, melakukan URL deduplication, menyertakan instance sumber dalam metadata, lalu mengirim source context ke NVIDIA Nemotron.
 
-```yaml
-use_default_settings: true
+SearX.space memperbarui daftar instance secara berkala dan menyediakan `instances.json` untuk konsumsi programatik. Public instances dapat mengalami traffic tinggi, upstream blocking, CAPTCHA, rate limiting, atau downtime. Karena itu desain CTP menggunakan discovery cache, health cooldown, rotation, dan failover daripada mengunci ke satu instance.
 
-server:
-  secret_key: "CHANGE_ME_TO_A_RANDOM_SECRET"
-  bind_address: "127.0.0.1:8080"
-
-search:
-  formats:
-    - html
-    - json
-```
-
-Simpan konfigurasi pada instance SearXNG, umumnya `/etc/searxng/settings.yml`, atau gunakan `SEARXNG_SETTINGS_PATH`. Jangan commit secret key production.
-
-Test:
-
-```bash
-curl "http://127.0.0.1:8080/search?q=bitcoin&format=json"
-```
-
-Deep Search menjalankan beberapa query dan halaman SearXNG, melakukan URL deduplication, lalu mengirim source context ke NVIDIA Nemotron.
-
-Catatan: self-hosted SearXNG menghilangkan vendor API quota dari SearXNG, tetapi search engine upstream dapat melakukan rate-limit/CAPTCHA.
+Untuk production dengan kebutuhan tinggi, self-hosting SearXNG tetap memberikan kontrol dan konsistensi lebih besar.
 
 ## 5. Authentication
 
@@ -377,12 +359,29 @@ Minimal:
  CORS_ORIGIN=http://localhost:3000
  NEXT_PUBLIC_API_URL=http://localhost:4000
 
-AI fallback:
+AI:
  NVIDIA_API_KEY=
  NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
  NVIDIA_MODEL=nvidia/nemotron-3-ultra-550b-a55b
  NVIDIA_ENABLE_THINKING=true
+ NVIDIA_REASONING_EFFORT=medium
+ NVIDIA_TEMPERATURE=0.15
+ NVIDIA_MAX_TOKENS=4096
  NVIDIA_TIMEOUT_MS=120000
+
+Deep Search:
+ SEARXNG_DISCOVERY_URL=https://searx.space/data/instances.json
+ SEARXNG_INSTANCE_COUNT=8
+ SEARXNG_TIMEOUT_MS=12000
+ SEARXNG_DISCOVERY_TTL_MS=600000
+ SEARXNG_FAILURE_COOLDOWN_MS=60000
+ SEARXNG_MAX_FAILURES=2
+ SEARXNG_LANGUAGE=en
+ SEARXNG_CATEGORIES=general,news
+ SEARXNG_SAFESEARCH=0
+ SEARXNG_TIME_RANGE=
+ SEARXNG_PAGES=2
+ SEARXNG_MAX_RESULTS=18
 
 Auth:
  AUTH_SECRET=generate-a-long-random-secret
@@ -399,7 +398,7 @@ News:
  NEWS_REFRESH_MS=30000
  NEWS_LIMIT=100
 
-AI provider/model/API key dapat dikonfigurasi dari dashboard sehingga ENV AI berfungsi sebagai fallback/default.
+AI provider/model/API key menggunakan server-side ENV. Jangan commit NVIDIA_API_KEY.
 
 ## 21. Database
 
@@ -518,7 +517,7 @@ Foundation:
 - [x] Profile menu
 - [x] Settings
 - [x] Telegram alert configuration
-- [x] Per-user AI configuration
+- [x] NVIDIA AI configuration
 
 Intelligence:
 - [x] Live News aggregation
