@@ -22,7 +22,7 @@ import {
   Wallet,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { type ComponentProps, useEffect, useState } from "react";
 
 const capabilities = [
   { icon: Newspaper, label: "Live News", title: "News → narrative intelligence", text: "Aggregate crypto news into source-aware stories, themes, catalysts, and risk mentions so research starts with evidence instead of noise." },
@@ -54,7 +54,7 @@ const modules = [
 
 const chains = ["Solana", "Ethereum", "Base", "Arbitrum", "BNB Chain", "Polygon", "TRON", "Aptos", "Sui"];
 
-function SparkIcon(props: React.ComponentProps<typeof Layers3>) {
+function SparkIcon(props: ComponentProps<typeof Layers3>) {
   return <Layers3 {...props} />;
 }
 
