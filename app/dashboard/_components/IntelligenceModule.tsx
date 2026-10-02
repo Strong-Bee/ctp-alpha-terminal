@@ -100,19 +100,33 @@ function EmptyState({ title = "Data source belum terhubung", detail = "Modul ini
 function Kpi({ label, value, detail }: { label: string; value: string; detail?: string }) {
   return <div className="min-w-0 rounded-2xl border border-white/10 bg-white/[.025] p-3.5 sm:p-5"><div className="text-[10px] font-bold uppercase tracking-[.18em] text-slate-600">{label}</div><div className="mt-3 text-xl font-bold text-slate-100">{value}</div>{detail && <div className="mt-1 text-[11px] text-slate-600">{detail}</div>}</div>;
 }
-function NewsList({ news }: { news: NewsItem[] }) {
-  return <div className="space-y-2">{news.slice(0, 20).map((item) => <a key={item.id} href={item.url} target="_blank" rel="noreferrer" className="block rounded-xl border border-white/5 bg-white/[.02] p-3 hover:border-cyan-400/20">
-    <div className="flex gap-2 text-[10px] uppercase tracking-wider text-slate-600"><span>{item.source}</span><span>•</span><span>{age(item.publishedAt)}</span><span>•</span><span>{item.category}</span></div>
-    <div className="mt-1 text-sm font-medium text-slate-200">{item.title}</div>
-    {item.summary && <div className="mt-1 line-clamp-2 text-xs leading-5 text-slate-600">{item.summary}</div>}
-  </a>)}</div>;
-}
-function MarketTable({ markets }: { markets: MarketItem[] }) {
-  return <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead className="text-[10px] uppercase tracking-wider text-slate-600"><tr><th className="pb-3">Asset</th><th className="pb-3">Price</th><th className="pb-3">24h</th><th className="pb-3">Volume</th><th className="pb-3">Market Cap</th></tr></thead><tbody>
-    {markets.slice(0,20).map((m) => <tr key={m.id} className="border-t border-white/5"><td className="py-3"><div className="font-semibold text-slate-200">{m.symbol}</div><div className="text-[10px] text-slate-600">{m.name}</div></td><td className="py-3 text-slate-300">{formatPrice(m.price)}</td><td className={"py-3 font-semibold " + (m.change24h >= 0 ? "text-emerald-400" : "text-rose-400")}>{m.change24h >= 0 ? "+" : ""}{m.change24h.toFixed(2)}%</td><td className="py-3 text-slate-400">{formatUsd(m.volume24h)}</td><td className="py-3 text-slate-400">{formatUsd(m.marketCap)}</td></tr>)}
-  </tbody></table></div>;
+function relativeTime(value: string) {
+  const diff = Math.max(0, Date.now() - Date.parse(value));
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return "now";
+  if (minutes < 60) return minutes + "m";
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return hours + "h";
+  return Math.floor(hours / 24) + "d";
 }
 
+function NewsList({ news }: { news: NewsItem[] }) {
+  return <div className="space-y-2.5">{news.slice(0, 20).map((item) => (
+    <a key={item.id} href={item.url} target="_blank" rel="noopener noreferrer" className="group block overflow-hidden rounded-2xl border border-white/[.07] bg-gradient-to-br from-white/[.035] to-white/[.015] p-4 transition hover:-translate-y-0.5 hover:border-cyan-400/25 hover:bg-cyan-400/[.025]">
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-cyan-400/10 bg-cyan-400/[.06] text-cyan-300"><Newspaper size={16}/></div>
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-wider text-slate-600">
+            <span className="text-cyan-300/80">{item.source}</span><span>•</span><span>{relativeTime(item.publishedAt)}</span><span className="rounded-full border border-white/10 px-1.5 py-0.5 text-[9px]">{item.category}</span>
+          </div>
+          <div className="line-clamp-2 text-sm font-semibold leading-5 text-slate-200 transition group-hover:text-white">{item.title}</div>
+          {item.summary && <div className="mt-1.5 line-clamp-2 text-xs leading-5 text-slate-500">{item.summary}</div>}
+        </div>
+        <ExternalLink size={14} className="mt-1 shrink-0 text-slate-700 transition group-hover:text-cyan-300"/>
+      </div>
+    </a>
+  ))}</div>;
+}
 function LiveNewsModule({ intel }: { intel: IntelResponse | null }) {
   const news = intel?.news ?? [];
   const categories = useMemo(() => [...new Set(news.map((n) => n.category))], [news]);
