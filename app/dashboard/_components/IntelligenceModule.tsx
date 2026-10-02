@@ -47,6 +47,7 @@ const navigation = [
 ] as const;
 
 const meta: Record<ModuleKey, { eyebrow: string; title: string; description: string }> = {
+  ai: { eyebrow: "AI Intelligence", title: "AI Assistant", description: "NVIDIA NIM-powered research assistant dengan live news context dan evidence-aware analysis." },
   overview: { eyebrow: "Command Center", title: "Overview", description: "Pusat kendali CTP Alpha Terminal: news, market state, alpha pipeline, dan risk context." },
   "live-news": { eyebrow: "Information Flow", title: "Live News", description: "Feed berita crypto multi-source yang diperbarui otomatis untuk headline, catalyst, narrative shift, dan risk event." },
   markets: { eyebrow: "Market Intelligence", title: "Markets", description: "Market scanner berbasis price, 24h change, market cap, dan volume dari live market feed." },
