@@ -50,3 +50,20 @@ model AlertEvent {
   @@index([userEmail,createdAt])
   @@index([settingsId,createdAt])
 }
+
+
+model UserAISettings {
+  id String @id @default(cuid())
+  userEmail String @unique
+  provider String @default("nvidia")
+  baseUrl String @default("https://integrate.api.nvidia.com/v1")
+  model String @default("nvidia/nemotron-3-ultra-550b-a55b")
+  apiKeyEncrypted String?
+  enableThinking Boolean @default(true)
+  reasoningEffort String @default("medium")
+  temperature Float @default(0.15)
+  maxTokens Int @default(4096)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([userEmail])
+}
