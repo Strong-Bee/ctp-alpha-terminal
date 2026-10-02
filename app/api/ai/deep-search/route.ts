@@ -156,13 +156,25 @@ export async function POST(request: Request) {
       30,
     );
 
-    const queryResults = await Promise.all(
+    const queryAttempts = await Promise.allSettled(
       buildQueries(message).flatMap((query) =>
         Array.from({ length: pages }, (_, index) =>
           searchSearXNG(query, index + 1),
         ),
       ),
     );
+
+    const queryResults = queryAttempts
+      .filter(
+        (attempt): attempt is PromiseFulfilledResult<Awaited<ReturnType<typeof searchSearXNG>>> =>
+          attempt.status === "fulfilled",
+      )
+      .map((attempt) => attempt.value);
+
+    const failedSearches = queryAttempts
+      .filter((attempt): attempt is PromiseRejectedResult => attempt.status === "rejected")
+      .map((attempt) => (attempt.reason instanceof Error ? attempt.reason.message : String(attempt.reason)))
+      .slice(0, 5);
 
     const results: SearchResult[] = queryResults
       .flatMap((response) => response.results)
@@ -175,7 +187,10 @@ export async function POST(request: Request) {
 
     if (!results.length) {
       return NextResponse.json(
-        { error: "Deep Search tidak menemukan sumber yang relevan" },
+        {
+          error: "Deep Search tidak menemukan sumber JSON yang tersedia dari public SearXNG instances",
+          failedSearches,
+        },
         { status: 502 },
       );
     }
@@ -205,6 +220,7 @@ ${content}`;
       deepSearch: true,
       sourceCount: results.length,
       instancesUsed: [...new Set(results.map((item) => item.instance))],
+      failedSearches,
       sources: results.map((item, index) => ({
         id: index + 1,
         title: item.title || item.url,
