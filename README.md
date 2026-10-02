@@ -12,7 +12,7 @@ Repository: https://github.com/Strong-Bee/ctp-alpha-terminal
 |---|---|
 | Trading Terminal | TradingView embedded chart, economic events, market workspace |
 | Overview | Market pulse, module health, alpha overview |
-| AI Assistant | AI research, configurable provider/model, per-user API key |
+| AI Assistant | AI research dengan NVIDIA NIM + self-hosted SearXNG Deep Search |
 | Live News | Multi-source crypto news, refresh, deduplication |
 | Markets | Price, 24h change, market cap, volume, scanner |
 | Narratives | Narrative discovery dan catalyst context |
@@ -93,6 +93,51 @@ NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
 NVIDIA_MODEL=nvidia/nemotron-3-ultra-550b-a55b
 NVIDIA_ENABLE_THINKING=true
 NVIDIA_TIMEOUT_MS=120000
+
+### Deep Search / SearXNG
+
+Deep Search menggunakan self-hosted SearXNG sebagai web research layer. CTP tidak membutuhkan Firecrawl API key.
+
+Environment:
+
+```env
+SEARXNG_URL=http://127.0.0.1:8080
+SEARXNG_LANGUAGE=en
+SEARXNG_CATEGORIES=general,news
+SEARXNG_SAFESEARCH=0
+SEARXNG_TIME_RANGE=
+SEARXNG_PAGES=2
+SEARXNG_MAX_RESULTS=18
+```
+
+SearXNG harus mengaktifkan JSON pada `search.formats`, karena Deep Search memanggil `/search?format=json`. SearXNG juga mendukung parameter `categories`, `pageno`, `language`, dan `time_range`.
+
+Contoh konfigurasi:
+
+```yaml
+use_default_settings: true
+
+server:
+  secret_key: "CHANGE_ME_TO_A_RANDOM_SECRET"
+  bind_address: "127.0.0.1:8080"
+
+search:
+  formats:
+    - html
+    - json
+```
+
+Simpan konfigurasi pada instance SearXNG, umumnya `/etc/searxng/settings.yml`, atau gunakan `SEARXNG_SETTINGS_PATH`. Jangan commit secret key production.
+
+Test:
+
+```bash
+curl "http://127.0.0.1:8080/search?q=bitcoin&format=json"
+```
+
+Deep Search menjalankan beberapa query dan halaman SearXNG, melakukan URL deduplication, lalu mengirim source context ke NVIDIA Nemotron.
+
+Catatan: self-hosted SearXNG menghilangkan vendor API quota dari SearXNG, tetapi search engine upstream dapat melakukan rate-limit/CAPTCHA.
 
 ## 5. Authentication
 
