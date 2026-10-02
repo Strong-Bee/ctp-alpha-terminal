@@ -21,13 +21,32 @@ export type MarketItem = {
 };
 
 const FEEDS = [
+  // Major crypto media
   { name: "CoinDesk", url: "https://www.coindesk.com/arc/outboundfeeds/rss/" },
   { name: "Cointelegraph", url: "https://cointelegraph.com/rss" },
   { name: "Decrypt", url: "https://decrypt.co/feed" },
   { name: "The Block", url: "https://www.theblock.co/rss.xml" },
   { name: "Bitcoin Magazine", url: "https://bitcoinmagazine.com/feed" },
   { name: "CryptoSlate", url: "https://cryptoslate.com/feed/" },
+  { name: "NewsBTC", url: "https://www.newsbtc.com/feed/" },
+  { name: "Bitcoin.com", url: "https://news.bitcoin.com/feed/" },
+  { name: "U.Today", url: "https://u.today/rss" },
+  { name: "CryptoPotato", url: "https://cryptopotato.com/feed/" },
+  { name: "BeInCrypto", url: "https://beincrypto.com/feed/" },
+  { name: "AMBCrypto", url: "https://ambcrypto.com/feed/" },
+  { name: "CryptoNews", url: "https://cryptonews.com/news/feed/" },
+  { name: "Blockworks", url: "https://blockworks.co/feed" },
+  { name: "The Daily Hodl", url: "https://dailyhodl.com/feed/" },
+  // Topic discovery through Google News RSS. These broaden coverage beyond fixed publishers.
   { name: "Google News Crypto", url: "https://news.google.com/rss/search?q=(bitcoin%20OR%20ethereum%20OR%20solana%20OR%20crypto%20OR%20defi)&hl=en-US&gl=US&ceid=US:en" },
+  { name: "Google News Bitcoin", url: "https://news.google.com/rss/search?q=bitcoin&hl=en-US&gl=US&ceid=US:en" },
+  { name: "Google News Ethereum", url: "https://news.google.com/rss/search?q=ethereum&hl=en-US&gl=US&ceid=US:en" },
+  { name: "Google News Solana", url: "https://news.google.com/rss/search?q=solana%20crypto&hl=en-US&gl=US&ceid=US:en" },
+  { name: "Google News DeFi", url: "https://news.google.com/rss/search?q=DeFi%20crypto&hl=en-US&gl=US&ceid=US:en" },
+  { name: "Google News ETF", url: "https://news.google.com/rss/search?q=crypto%20ETF%20bitcoin%20ethereum&hl=en-US&gl=US&ceid=US:en" },
+  { name: "Google News Regulation", url: "https://news.google.com/rss/search?q=crypto%20regulation%20SEC%20CFTC&hl=en-US&gl=US&ceid=US:en" },
+  { name: "Google News Security", url: "https://news.google.com/rss/search?q=crypto%20hack%20exploit%20security&hl=en-US&gl=US&ceid=US:en" },
+  { name: "Google News Macro", url: "https://news.google.com/rss/search?q=crypto%20Fed%20FOMC%20CPI%20inflation&hl=en-US&gl=US&ceid=US:en" },
 ];
 
 let cache: { at: number; news: CryptoNewsItem[]; markets: MarketItem[] } = {
