@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { searchSearXNG } from "./searxng";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,6 +12,7 @@ type SearchResult = {
   content?: string;
   publishedDate?: string;
   engine?: string | string[];
+  instance: string;
 };
 
 const buildQueries = (message: string) => [
@@ -19,43 +21,24 @@ const buildQueries = (message: string) => [
   message + " risks counterarguments technical analysis",
 ];
 
-async function searxngSearch(query: string, page = 1): Promise<SearchResult[]> {
-  const baseUrl = (process.env.SEARXNG_URL || "").replace(/\/$/, "");
-  if (!baseUrl) throw new Error("SEARXNG_URL belum diatur di .env.local/.env untuk Deep Search");
-  const url = new URL(baseUrl + "/search");
-  url.searchParams.set("q", query);
-  url.searchParams.set("format", "json");
-  url.searchParams.set("language", process.env.SEARXNG_LANGUAGE || "en");
-  url.searchParams.set("categories", process.env.SEARXNG_CATEGORIES || "general,news");
-  url.searchParams.set("safesearch", process.env.SEARXNG_SAFESEARCH || "0");
-  url.searchParams.set("pageno", String(page));
-  const timeRange = process.env.SEARXNG_TIME_RANGE;
-  if (timeRange && ["day", "month", "year"].includes(timeRange)) url.searchParams.set("time_range", timeRange);
-  const response = await fetch(url, {
-    headers: { Accept: "application/json", "User-Agent": "CTP-Alpha-Terminal/1.0" },
-    cache: "no-store",
-    signal: AbortSignal.timeout(20000),
-  });
-  const raw = await response.text();
-  let data: any = {};
-  try { data = JSON.parse(raw); } catch { throw new Error("SearXNG returned invalid JSON"); }
-  if (!response.ok) throw new Error(data?.error || "SearXNG search failed");
-  return Array.isArray(data.results) ? data.results.map((item: any) => ({
-    title: item.title, url: item.url, description: item.content, content: item.content,
-    publishedDate: item.publishedDate, engine: item.engine,
-  })) : [];
-}
-
 async function askNvidia(
   message: string,
   model: string,
   context: string,
   apiKey: string,
 ) {
-  const baseUrl = (process.env.NVIDIA_BASE_URL || "https://integrate.api.nvidia.com/v1").replace(/\/$/, "");
-  const temperature = Number.isFinite(Number(process.env.NVIDIA_TEMPERATURE)) ? Number(process.env.NVIDIA_TEMPERATURE) : 0.1;
-  const maxTokens = Number.isInteger(Number(process.env.NVIDIA_MAX_TOKENS)) ? Number(process.env.NVIDIA_MAX_TOKENS) : 4096;
-  const reasoningEffort = ["none", "medium", "high"].includes(process.env.NVIDIA_REASONING_EFFORT || "")
+  const baseUrl = (
+    process.env.NVIDIA_BASE_URL || "https://integrate.api.nvidia.com/v1"
+  ).replace(/\/$/, "");
+  const temperature = Number.isFinite(Number(process.env.NVIDIA_TEMPERATURE))
+    ? Number(process.env.NVIDIA_TEMPERATURE)
+    : 0.1;
+  const maxTokens = Number.isInteger(Number(process.env.NVIDIA_MAX_TOKENS))
+    ? Number(process.env.NVIDIA_MAX_TOKENS)
+    : 4096;
+  const reasoningEffort = ["none", "medium", "high"].includes(
+    process.env.NVIDIA_REASONING_EFFORT || "",
+  )
     ? process.env.NVIDIA_REASONING_EFFORT
     : "medium";
 
@@ -89,67 +72,131 @@ ${context}`,
     stream: false,
   };
 
-  if (reasoningEffort !== "none") requestBody.reasoning_effort = reasoningEffort;
+  if (reasoningEffort !== "none") {
+    requestBody.reasoning_effort = reasoningEffort;
+  }
   if (process.env.NVIDIA_ENABLE_THINKING !== "false") {
     requestBody.chat_template_kwargs = { enable_thinking: true };
   }
 
   const response = await fetch(baseUrl + "/chat/completions", {
     method: "POST",
-    headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: "Bearer " + apiKey },
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + apiKey,
+    },
     body: JSON.stringify(requestBody),
-    signal: AbortSignal.timeout(Number(process.env.NVIDIA_TIMEOUT_MS) || 120000),
+    signal: AbortSignal.timeout(
+      Number(process.env.NVIDIA_TIMEOUT_MS) || 120000,
+    ),
   });
 
   const raw = await response.text();
-  let data: any = {};
-  try { data = JSON.parse(raw); } catch {
+  let data: {
+    choices?: Array<{ message?: { content?: string } }>;
+    usage?: unknown;
+    model?: string;
+    error?: { message?: string };
+  } = {};
+
+  try {
+    data = JSON.parse(raw);
+  } catch {
     throw new Error("NVIDIA returned invalid JSON");
   }
-  if (!response.ok) throw new Error(data.error?.message || raw.slice(0, 500));
+
+  if (!response.ok) {
+    throw new Error(data.error?.message || raw.slice(0, 500));
+  }
+
   const answer = data.choices?.[0]?.message?.content || "";
   if (!answer) throw new Error("NVIDIA returned an empty answer");
-  return { answer, usage: data.usage || null, model: data.model || model };
+
+  return {
+    answer,
+    usage: data.usage || null,
+    model: data.model || model,
+  };
 }
 
 export async function POST(request: Request) {
   const session = await auth();
-  if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   const body = await request.json().catch(() => ({}));
   const message = String(body.message || "").trim();
-  const model = String(body.model || process.env.NVIDIA_MODEL || "nvidia/nemotron-3-ultra-550b-a55b").trim();
+  const model = String(
+    body.model ||
+      process.env.NVIDIA_MODEL ||
+      "nvidia/nemotron-3-ultra-550b-a55b",
+  ).trim();
 
-  if (!message) return NextResponse.json({ error: "Message is required" }, { status: 400 });
+  if (!message) {
+    return NextResponse.json({ error: "Message is required" }, { status: 400 });
+  }
 
   const nvidiaKey = process.env.NVIDIA_API_KEY;
-  const searxngUrl = process.env.SEARXNG_URL;
-  if (!nvidiaKey) return NextResponse.json({ error: "NVIDIA_API_KEY belum diatur di .env.local/.env" }, { status: 400 });
-  if (!searxngUrl) return NextResponse.json({ error: "SEARXNG_URL belum diatur di .env.local/.env untuk Deep Search" }, { status: 400 });
+  if (!nvidiaKey) {
+    return NextResponse.json(
+      { error: "NVIDIA_API_KEY belum diatur di .env.local/.env" },
+      { status: 400 },
+    );
+  }
 
   try {
-    const pages = Math.min(Math.max(Number(process.env.SEARXNG_PAGES || 1), 1), 3);
-    const maxResults = Math.min(Math.max(Number(process.env.SEARXNG_MAX_RESULTS || 12), 1), 30);
-    const queryResults = await Promise.all(
-      buildQueries(message).flatMap(query => Array.from({ length: pages }, (_, index) => searxngSearch(query, index + 1))),
+    const pages = Math.min(
+      Math.max(Number(process.env.SEARXNG_PAGES || 1), 1),
+      3,
     );
-    const results = queryResults.flat()
-      .filter(item => item.url)
-      .filter((item, index, arr) => arr.findIndex(x => x.url === item.url) === index)
+    const maxResults = Math.min(
+      Math.max(Number(process.env.SEARXNG_MAX_RESULTS || 12), 1),
+      30,
+    );
+
+    const queryResults = await Promise.all(
+      buildQueries(message).flatMap((query) =>
+        Array.from({ length: pages }, (_, index) =>
+          searchSearXNG(query, index + 1),
+        ),
+      ),
+    );
+
+    const results: SearchResult[] = queryResults
+      .flatMap((response) => response.results)
+      .filter((item) => item.url)
+      .filter(
+        (item, index, arr) =>
+          arr.findIndex((candidate) => candidate.url === item.url) === index,
+      )
       .slice(0, maxResults);
 
-    if (!results.length) return NextResponse.json({ error: "Deep Search tidak menemukan sumber yang relevan" }, { status: 502 });
+    if (!results.length) {
+      return NextResponse.json(
+        { error: "Deep Search tidak menemukan sumber yang relevan" },
+        { status: 502 },
+      );
+    }
 
-    const context = results.map((item, index) => {
-      const content = String(item.content || item.description || "").slice(0, 7000);
-      return `SOURCE [${index + 1}]
+    const context = results
+      .map((item, index) => {
+        const content = String(
+          item.content || item.description || "",
+        ).slice(0, 7000);
+
+        return `SOURCE [${index + 1}]
 TITLE: ${item.title || "Untitled"}
 URL: ${item.url}
+SEARXNG INSTANCE: ${item.instance}
 CONTENT:
 ${content}`;
-    }).join("\n\n---\n\n");
+      })
+      .join("\n\n---\n\n");
 
     const ai = await askNvidia(message, model, context, nvidiaKey);
+
     return NextResponse.json({
       provider: "nvidia",
       model: ai.model,
@@ -157,11 +204,20 @@ ${content}`;
       usage: ai.usage,
       deepSearch: true,
       sourceCount: results.length,
-      sources: results.map((item, index) => ({ id: index + 1, title: item.title || item.url, url: item.url })),
+      instancesUsed: [...new Set(results.map((item) => item.instance))],
+      sources: results.map((item, index) => ({
+        id: index + 1,
+        title: item.title || item.url,
+        url: item.url,
+        instance: item.instance,
+      })),
     });
   } catch (error) {
-    return NextResponse.json({
-      error: error instanceof Error ? error.message : "Deep Search failed",
-    }, { status: 502 });
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : "Deep Search failed",
+      },
+      { status: 502 },
+    );
   }
 }
