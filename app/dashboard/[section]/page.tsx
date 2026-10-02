@@ -1,7 +1,7 @@
 import IntelligenceModule from "../_components/IntelligenceModule";
 
 const allowed = new Set([
-  "alpha-signals","launches","on-chain","wallet-intel","defi","risk-engine",
+  "ai","alpha-signals","launches","on-chain","wallet-intel","defi","risk-engine",
   "order-flow","macro","cycles","thesis","alerts","settings"
 ]);
 
