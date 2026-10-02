@@ -194,6 +194,59 @@ function MarketTable({ markets }: { markets: MarketItem[] }) {
     </table>
   </div>;
 }
+function TradingViewChart({ symbol = "BINANCE:BTCUSDT", height = 560 }: { symbol?: string; height?: number }) {
+  const [host, setHost] = useState<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!host) return;
+    host.innerHTML = "";
+    const widget = document.createElement("div");
+    widget.className = "tradingview-widget-container__widget";
+    widget.style.height = "calc(100% - 28px)";
+    widget.style.width = "100%";
+    const script = document.createElement("script");
+    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
+    script.type = "text/javascript";
+    script.async = true;
+    script.text = JSON.stringify({
+      autosize: true,
+      symbol,
+      interval: "60",
+      timezone: "Asia/Jakarta",
+      theme: "dark",
+      style: "1",
+      locale: "en",
+      allow_symbol_change: true,
+      hide_top_toolbar: false,
+      hide_side_toolbar: false,
+      hide_legend: false,
+      hide_volume: false,
+      withdateranges: true,
+      save_image: true,
+      details: true,
+      hotlist: false,
+      calendar: true,
+      studies: ["Volume@tv-basicstudies", "RSI@tv-basicstudies", "MACD@tv-basicstudies"],
+      watchlist: ["BINANCE:BTCUSDT", "BINANCE:ETHUSDT", "BINANCE:SOLUSDT", "BINANCE:BNBUSDT", "BINANCE:XRPUSDT"],
+      support_host: "https://www.tradingview.com",
+    });
+    host.appendChild(widget);
+    host.appendChild(script);
+    return () => {
+      host.innerHTML = "";
+    };
+  }, [host, symbol]);
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#080b11]">
+      <div ref={setHost} className="tradingview-widget-container w-full" style={{ height }} />
+      <div className="border-t border-white/5 px-3 py-2 text-[10px] text-slate-600">
+        TradingView Advanced Chart • display-only market visualization
+      </div>
+    </div>
+  );
+}
+
 function MarketsModule({ intel }: { intel: IntelResponse | null }) {
   const markets = intel?.markets ?? [];
   const gainers = [...markets].sort((a,b)=>b.change24h-a.change24h).slice(0,5);
@@ -201,6 +254,9 @@ function MarketsModule({ intel }: { intel: IntelResponse | null }) {
   const volume = [...markets].sort((a,b)=>b.volume24h-a.volume24h)[0];
   return <div className="space-y-5">
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Kpi label="Tracked Assets" value={String(markets.length)} detail="CoinGecko market feed"/><Kpi label="Top Volume" value={volume?.symbol ?? "—"} detail={volume ? formatUsd(volume.volume24h) : "no data"}/><Kpi label="Top Gainer" value={gainers[0] ? gainers[0].symbol + " " + (gainers[0].change24h >= 0 ? "+" : "") + gainers[0].change24h.toFixed(2) + "%" : "—"}/><Kpi label="Top Loser" value={losers[0] ? losers[0].symbol + " " + losers[0].change24h.toFixed(2) + "%" : "—"}/></div>
+    <Section title="TradingView Market Chart">
+      <TradingViewChart symbol="BINANCE:BTCUSDT" height={600}/>
+    </Section>
     <Section title="Live Market Scanner">{markets.length ? <MarketTable markets={markets}/> : <EmptyState title="Market feed kosong"/>}</Section>
     <div className="grid gap-5 xl:grid-cols-2"><Section title="Top Gainers"><MarketTable markets={gainers}/></Section><Section title="Top Losers"><MarketTable markets={losers}/></Section></div>
   </div>;
