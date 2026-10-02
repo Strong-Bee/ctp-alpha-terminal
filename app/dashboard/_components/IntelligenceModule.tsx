@@ -98,29 +98,6 @@ function AIAssistantModule() {
     }catch(e){setError(e instanceof Error?e.message:"Failed to load AI settings");}
   },[]);
   useEffect(()=>{void loadSettings();},[loadSettings]);
-  useEffect(()=>{
-    const key=settings.apiKey.trim();
-    if(!key && !settings.apiKeyConfigured){ setModels([]); return; }
-    let cancelled=false;
-    const timer=window.setTimeout(async()=>{
-      setModelsLoading(true);
-      try{
-        const r=await fetch("/api/ai/models",{method:"POST",credentials:"same-origin",cache:"no-store",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({provider:settings.provider,baseUrl:settings.baseUrl,apiKey:key})});
-        const data=await parseJsonResponse(r);
-        if(!r.ok) throw new Error(data.error||"Gagal mengambil daftar model");
-        if(!cancelled){
-          const list=Array.isArray(data.models)?data.models:[];
-          setModels(list);
-          if(list.length && !list.some((m:any)=>m.id===settings.model)) setSettings(v=>({...v,model:list[0].id}));
-          setNotice(list.length ? list.length+" model tersedia dari provider." : "API key valid, tetapi provider tidak mengembalikan daftar model.");
-        }
-      }catch(e){ if(!cancelled) setError(e instanceof Error?e.message:"Gagal mengambil daftar model"); }
-      finally{ if(!cancelled) setModelsLoading(false); }
-    },500);
-    return()=>{cancelled=true;window.clearTimeout(timer);};
-  },[settings.apiKey,settings.apiKeyConfigured,settings.provider,settings.baseUrl]);
-
-
   const saveSettings=async()=>{
     if(saving)return;
     setSaving(true);setError("");setNotice("");
