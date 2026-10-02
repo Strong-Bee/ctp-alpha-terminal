@@ -13,7 +13,9 @@ const schema = z.object({
   NVIDIA_ENABLE_THINKING: z.coerce.boolean().default(true),
   NVIDIA_TIMEOUT_MS: z.coerce.number().int().positive().default(120000),
   NEWS_REFRESH_MS: z.coerce.number().int().min(10000).default(30000),
-  NEWS_LIMIT: z.coerce.number().int().min(10).max(100).default(50),
+  NEWS_LIMIT: z.coerce.number().int().min(10).max(100).default(100),
+  ONCHAIN_RPC_URLS: z.string().default(""),
+  ONCHAIN_RPC_TIMEOUT_MS: z.coerce.number().int().positive().default(15000),
 });
 
 export const env = schema.parse(process.env);
