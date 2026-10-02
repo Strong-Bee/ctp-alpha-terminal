@@ -21,7 +21,7 @@ Crypto Alpha & On-Chain Intelligence platform for narrative discovery, launch mo
 
 ## Local development
 1. Copy .env.example to .env.
-2. Start PostgreSQL and Redis with `docker compose up -d`.
+2. Start PostgreSQL and Redis with `npm install
 3. Run the Next.js app with `npm run dev`.
 4. Run API with `npm run --workspace=@ctp/api install && npm run --workspace=@ctp/api dev`.
 5. Run worker with `npm run --workspace=@ctp/worker install && npm run --workspace=@ctp/worker dev`.
