@@ -77,8 +77,6 @@ function AIAssistantModule() {
   const [testing,setTesting]=useState(false);
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
-  const [models,setModels]=useState<Array<{id:string;name?:string;ownedBy?:string|null;contextLength?:number|null}>>([]);
-  const [modelsLoading,setModelsLoading]=useState(false);
   const [settings,setSettings]=useState({
     provider:"nvidia", baseUrl:"https://integrate.api.nvidia.com/v1", model:"nvidia/nemotron-3-ultra-550b-a55b",
     apiKey:"", apiKeyConfigured:false, enableThinking:true, reasoningEffort:"medium", temperature:0.15, maxTokens:4096,
@@ -202,11 +200,8 @@ function AIAssistantModule() {
           </select>
         </label>
         <label className="text-xs text-slate-500">Model
-          <select value={settings.model} onChange={e=>setSettings(v=>({...v,model:e.target.value}))} className="mt-2 w-full rounded-xl border border-white/10 bg-[#0a0e15] px-3 py-3 text-sm text-white outline-none focus:border-cyan-400/30" disabled={modelsLoading}>
-            {models.length===0 && <option value={settings.model}>{modelsLoading ? "Loading models…" : settings.model || "Masukkan API key untuk memuat model"}</option>}
-            {models.map(model=><option key={model.id} value={model.id}>{model.name && model.name!==model.id ? model.name+" — "+model.id : model.id}</option>)}
-          </select>
-          <span className="mt-2 block text-[10px] text-slate-600">{modelsLoading ? "Mengambil daftar model dari provider…" : models.length ? models.length+" model tersedia" : "Masukkan API key untuk memuat semua model yang tersedia."}</span>
+          <input value={settings.model} onChange={e=>setSettings(v=>({...v,model:e.target.value}))} placeholder="nvidia/nemotron-3-ultra-550b-a55b" className="mt-2 w-full rounded-xl border border-white/10 bg-[#0a0e15] px-3 py-3 text-sm text-white outline-none focus:border-cyan-400/30"/>
+          <span className="mt-2 block text-[10px] text-slate-600">Masukkan model ID yang tersedia dari provider.</span>
         </label>
         <label className="text-xs text-slate-500 md:col-span-2">Base URL
           <input value={settings.baseUrl} onChange={e=>setSettings(v=>({...v,baseUrl:e.target.value}))} placeholder="https://integrate.api.nvidia.com/v1" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-white outline-none focus:border-cyan-400/30"/>
