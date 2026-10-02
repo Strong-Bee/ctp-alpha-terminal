@@ -77,6 +77,8 @@ function AIAssistantModule() {
   const [testing,setTesting]=useState(false);
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
+  const [models,setModels]=useState<Array<{id:string;name?:string;ownedBy?:string|null;contextLength?:number|null}>>([]);
+  const [modelsLoading,setModelsLoading]=useState(false);
   const [settings,setSettings]=useState({
     provider:"nvidia", baseUrl:"https://integrate.api.nvidia.com/v1", model:"nvidia/nemotron-3-ultra-550b-a55b",
     apiKey:"", apiKeyConfigured:false, enableThinking:true, reasoningEffort:"medium", temperature:0.15, maxTokens:4096,
@@ -97,7 +99,28 @@ function AIAssistantModule() {
       setSettings(v=>({...v,...data.settings}));
     }catch(e){setError(e instanceof Error?e.message:"Failed to load AI settings");}
   },[]);
-  useEffect(()=>{void loadSettings();},[loadSettings]);
+  useEffect(()=>{void loadSettings();},[loadSettings]);\n  useEffect(()=>{
+    const key=settings.apiKey.trim();
+    if(!key && !settings.apiKeyConfigured){ setModels([]); return; }
+    let cancelled=false;
+    const timer=window.setTimeout(async()=>{
+      setModelsLoading(true);
+      try{
+        const r=await fetch("/api/ai/models",{method:"POST",credentials:"same-origin",cache:"no-store",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({provider:settings.provider,baseUrl:settings.baseUrl,apiKey:key})});
+        const data=await parseJsonResponse(r);
+        if(!r.ok) throw new Error(data.error||"Gagal mengambil daftar model");
+        if(!cancelled){
+          const list=Array.isArray(data.models)?data.models:[];
+          setModels(list);
+          if(list.length && !list.some((m:any)=>m.id===settings.model)) setSettings(v=>({...v,model:list[0].id}));
+          setNotice(list.length ? list.length+" model tersedia dari provider." : "API key valid, tetapi provider tidak mengembalikan daftar model.");
+        }
+      }catch(e){ if(!cancelled) setError(e instanceof Error?e.message:"Gagal mengambil daftar model"); }
+      finally{ if(!cancelled) setModelsLoading(false); }
+    },500);
+    return()=>{cancelled=true;window.clearTimeout(timer);};
+  },[settings.apiKey,settings.apiKeyConfigured,settings.provider,settings.baseUrl]);
+
 
   const saveSettings=async()=>{
     if(saving)return;
@@ -178,7 +201,11 @@ function AIAssistantModule() {
           </select>
         </label>
         <label className="text-xs text-slate-500">Model
-          <input value={settings.model} onChange={e=>setSettings(v=>({...v,model:e.target.value}))} placeholder="nvidia/nemotron-3-ultra-550b-a55b" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-white outline-none focus:border-cyan-400/30"/>
+          <select value={settings.model} onChange={e=>setSettings(v=>({...v,model:e.target.value}))} className="mt-2 w-full rounded-xl border border-white/10 bg-[#0a0e15] px-3 py-3 text-sm text-white outline-none focus:border-cyan-400/30" disabled={modelsLoading}>
+            {models.length===0 && <option value={settings.model}>{modelsLoading ? "Loading models…" : settings.model || "Masukkan API key untuk memuat model"}</option>}
+            {models.map(model=><option key={model.id} value={model.id}>{model.name && model.name!==model.id ? model.name+" — "+model.id : model.id}</option>)}
+          </select>
+          <span className="mt-2 block text-[10px] text-slate-600">{modelsLoading ? "Mengambil daftar model dari provider…" : models.length ? models.length+" model tersedia" : "Masukkan API key untuk memuat semua model yang tersedia."}</span>
         </label>
         <label className="text-xs text-slate-500 md:col-span-2">Base URL
           <input value={settings.baseUrl} onChange={e=>setSettings(v=>({...v,baseUrl:e.target.value}))} placeholder="https://integrate.api.nvidia.com/v1" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-white outline-none focus:border-cyan-400/30"/>
