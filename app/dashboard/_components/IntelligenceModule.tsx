@@ -769,29 +769,32 @@ function OperationalModule({ module, intel }: { module: ModuleKey; intel: IntelR
   return <div className="space-y-5"><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Kpi label="Module" value={meta[module].title}/><Kpi label="News Feed" value={intel ? "ONLINE":"OFFLINE"} detail={intel ? String(intel.news.length)+" stories":"no response"}/><Kpi label="Market Feed" value={intel?.markets.length ? "ONLINE":"NO DATA"} detail="CoinGecko"/><Kpi label="Refresh" value={intel ? Math.round(intel.refreshMs/1000)+"s":"—"}/></div><Section title={d.title}><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{d.items.map(x=><div key={x} className="rounded-xl border border-white/5 bg-white/[.02] p-4"><div className="text-sm text-slate-300">{x}</div><div className="mt-2 text-[10px] uppercase tracking-wider text-slate-600">data input</div></div>)}</div><div className="mt-4 rounded-xl border border-amber-400/10 bg-amber-400/[.03] p-4 text-xs leading-5 text-slate-500">{d.note}</div></Section>{module==="launches"&&<Section title="Live DEX Screener Feeds">{launchError&&<div className="mb-3 rounded-xl border border-rose-400/10 bg-rose-400/[.03] p-3 text-xs text-rose-300">{launchError}</div>}<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{["token-profiles/latest","token-profiles/recent","token-boosts/latest","token-boosts/top","ads/latest","community-takeovers/latest"].map(key=>{const value=launches?.[key];const count=Array.isArray(value)?value.length:(value&&typeof value==="object"&&Array.isArray((value as {pairs?:unknown[]}).pairs)?(value as {pairs:unknown[]}).pairs.length:0);return <div key={key} className="rounded-xl border border-white/5 bg-white/[.02] p-4"><div className="text-xs text-slate-400">{key}</div><div className="mt-2 text-xl font-bold text-slate-200">{launches?count:"—"}</div><div className="mt-1 text-[10px] uppercase tracking-wider text-slate-600">records</div></div>})}</div></Section>}</div>;
 }
 const chainExplorers = [
-  ["Solscan", "https://solscan.io/", "Solana"],
-  ["Etherscan", "https://etherscan.io/", "Ethereum"],
-  ["BaseScan", "https://basescan.org/", "Base"],
-  ["Arbiscan", "https://arbiscan.io/", "Arbitrum"],
-  ["BscScan", "https://bscscan.com/", "BNB Chain"],
-  ["PolygonScan", "https://polygonscan.com/", "Polygon"],
-  ["Tronscan", "https://tronscan.org/", "TRON"],
-  ["Aptos Explorer", "https://explorer.aptoslabs.com/", "Aptos"],
-  ["Sui Explorer", "https://suiscan.xyz/", "Sui"],
-  ["DexScreener", "https://dexscreener.com/", "DEX / Multi-chain"],
-  ["GeckoTerminal", "https://www.geckoterminal.com/", "DEX / Multi-chain"],
-  ["Birdeye", "https://birdeye.so/", "Solana / Multi-chain"],
+  ["Solana", "Solscan", "https://solscan.io/", "Explorer"],
+  ["Ethereum", "Etherscan", "https://etherscan.io/", "Explorer"],
+  ["Base", "BaseScan", "https://basescan.org/", "Explorer"],
+  ["Arbitrum", "Arbiscan", "https://arbiscan.io/", "Explorer"],
+  ["BNB Chain", "BscScan", "https://bscscan.com/", "Explorer"],
+  ["Polygon", "PolygonScan", "https://polygonscan.com/", "Explorer"],
+  ["TRON", "Tronscan", "https://tronscan.org/", "Explorer"],
+  ["Aptos", "Aptos Explorer", "https://explorer.aptoslabs.com/", "Explorer"],
+  ["Sui", "Sui Explorer", "https://suiscan.xyz/", "Explorer"],
+  ["Multi-chain", "DEX Screener", "https://dexscreener.com/", "DEX"],
+  ["Multi-chain", "GeckoTerminal", "https://www.geckoterminal.com/", "DEX"],
+  ["Solana / Multi-chain", "Birdeye", "https://birdeye.so/", "DEX"],
 ] as const;
 
 function ChainExplorers() {
   return <div className="mt-5 border-t border-white/5 pt-4">
-    <div className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[.25em] text-slate-600">Chain Explorers</div>
-    <div className="space-y-1">
-      {chainExplorers.map(([label, href, network]) => (
-        <a key={label} href={href} target="_blank" rel="noopener noreferrer" title={network}
-          className="flex items-center justify-between rounded-xl px-3 py-2 text-xs text-slate-500 transition hover:bg-white/5 hover:text-cyan-200">
-          <span className="flex items-center gap-2"><ExternalLink size={13}/>{label}</span>
-          <span className="text-[9px] text-slate-700">{network}</span>
+    <div className="mb-3 flex items-center justify-between px-3">
+      <div className="text-[10px] font-bold uppercase tracking-[.25em] text-slate-600">Chain Explorers</div>
+      <span className="rounded-full border border-cyan-400/10 bg-cyan-400/[.03] px-2 py-1 text-[9px] text-cyan-300/70">12 sources</span>
+    </div>
+    <div className="space-y-1.5">
+      {chainExplorers.map(([network, label, href, type]) => (
+        <a key={label} href={href} target="_blank" rel="noopener noreferrer" title={network + " • " + type}
+          className="group flex items-center justify-between rounded-xl border border-transparent px-3 py-2.5 text-xs text-slate-500 transition hover:border-cyan-400/10 hover:bg-cyan-400/[.03] hover:text-cyan-200">
+          <span className="flex min-w-0 items-center gap-2"><ExternalLink size={13} className="shrink-0"/><span className="truncate">{label}</span></span>
+          <span className="ml-2 shrink-0 text-[9px] text-slate-700 group-hover:text-cyan-300/50">{network}</span>
         </a>
       ))}
     </div>
