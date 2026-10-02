@@ -84,8 +84,7 @@ router.post("/chat", async (req, res) => {
 
     const messages = [
       { role: "system" as const, content: ALPHA_SYSTEM_PROMPT },
-      ...(terminalContext ? [{ role: "system" as const, content: terminalContext }] : []),
-      { role: "user" as const, content: parsed.data.message },
+      { role: "user" as const, content: terminalContext ? terminalContext + "\n\nUSER QUESTION:\n" + parsed.data.message : parsed.data.message },
     ];
 
     const result = await nvidiaChat({
