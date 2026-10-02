@@ -35,29 +35,55 @@ export default function Home() {
   const [answer, setAnswer] = useState("");
   const [loadingAi, setLoadingAi] = useState(false);
   const [sidebar, setSidebar] = useState(true);
-  const base = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+  const [apiBase, setApiBase] = useState(process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000");
+  const base = apiBase.replace(/\/$/, "");
 
   const load = async () => {
     try {
-      const health = await fetch(base + "/health");
-      setApi(health.ok ? "online" : "error");
-      setSummary(await fetch(base + "/api/v1/dashboard/summary").then((r) => r.json()));
-    } catch { setApi("offline"); }
+      const healthResponse = await fetch(base + "/health", { cache: "no-store" });
+      const health = await healthResponse.json().catch(() => ({}));
+      setApi(healthResponse.ok ? "online" : "error");
+      const summaryResponse = await fetch(base + "/api/v1/dashboard/summary", { cache: "no-store" });
+      if (summaryResponse.ok) setSummary(await summaryResponse.json());
+    } catch (error) {
+      setApi("offline");
+      console.error("CTP API connection failed:", error);
+    }
   };
-  useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    void load();
+  }, [base]);
+
   async function askAi(event: FormEvent) {
     event.preventDefault();
     if (!message.trim() || loadingAi) return;
-    setLoadingAi(true); setAnswer("");
+    setLoadingAi(true);
+    setAnswer("");
     try {
       const response = await fetch(base + "/api/v1/ai/chat", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, context: JSON.stringify(summary) }),
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message,
+          context: JSON.stringify(summary),
+          reasoningEffort: "medium",
+          maxTokens: 4096,
+        }),
       });
-      const data = await response.json();
-      setAnswer(response.ok ? data.answer : data.message ?? data.error ?? "AI request failed");
-    } catch { setAnswer("Tidak dapat terhubung ke NVIDIA AI."); }
-    finally { setLoadingAi(false); }
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setAnswer(data.message ?? data.error ?? `NVIDIA AI error (HTTP ${response.status})`);
+        return;
+      }
+      setAnswer(data.answer ?? "NVIDIA AI tidak mengembalikan jawaban.");
+    } catch (error) {
+      setAnswer(
+        `Tidak dapat terhubung ke CTP API di ${base}. Pastikan Express API berjalan dan NEXT_PUBLIC_API_URL benar. ${error instanceof Error ? error.message : ""}`,
+      );
+    } finally {
+      setLoadingAi(false);
+    }
   }
 
   const score = summary?.alpha.score ?? 0;
