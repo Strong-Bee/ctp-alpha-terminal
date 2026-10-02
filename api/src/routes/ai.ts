@@ -8,8 +8,9 @@ const router = Router();
 const chatSchema = z.object({
   message: z.string().min(1).max(12000),
   context: z.string().max(20000).optional(),
-  temperature: z.number().min(0).max(2).optional(),
-  maxTokens: z.number().int().min(64).max(4096).optional(),
+  temperature: z.number().min(0).max(1).optional(),
+  maxTokens: z.number().int().min(64).max(32768).optional(),
+  reasoningEffort: z.enum(["none", "medium", "high"]).optional(),
 });
 
 const alphaSchema = z.object({
@@ -45,6 +46,7 @@ router.get("/health", (_req, res) => {
     configured: Boolean(env.NVIDIA_API_KEY),
     baseUrl: env.NVIDIA_BASE_URL,
     model: env.NVIDIA_MODEL,
+    timeoutMs: env.NVIDIA_TIMEOUT_MS,
   });
 });
 
@@ -59,12 +61,13 @@ router.post("/chat", async (req, res) => {
       messages: [
         { role: "system", content: ALPHA_SYSTEM_PROMPT },
         ...(parsed.data.context
-          ? [{ role: "system" as const, content: `Terminal context:\n${parsed.data.context}` }]
+          ? [{ role: "user" as const, content: `Terminal context:\n${parsed.data.context}` }]
           : []),
         { role: "user", content: parsed.data.message },
       ],
-      temperature: parsed.data.temperature,
-      maxTokens: parsed.data.maxTokens,
+      temperature: parsed.data.temperature ?? 0.2,
+      maxTokens: parsed.data.maxTokens ?? 4096,
+      reasoningEffort: parsed.data.reasoningEffort ?? "medium",
     });
 
     return res.json({
@@ -104,7 +107,8 @@ router.post("/alpha-analysis", async (req, res) => {
         { role: "user", content: `Analyze this CTP Alpha Terminal dataset.\n\n${context}` },
       ],
       temperature: 0.1,
-      maxTokens: 1800,
+      maxTokens: 4096,
+      reasoningEffort: "medium",
     });
 
     return res.json({
