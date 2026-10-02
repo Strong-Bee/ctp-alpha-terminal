@@ -12,6 +12,8 @@ const schema = z.object({
   NVIDIA_MODEL: z.string().min(1).default("nvidia/nemotron-3-ultra-550b-a55b"),
   NVIDIA_ENABLE_THINKING: z.coerce.boolean().default(true),
   NVIDIA_TIMEOUT_MS: z.coerce.number().int().positive().default(120000),
+  NEWS_REFRESH_MS: z.coerce.number().int().min(10000).default(30000),
+  NEWS_LIMIT: z.coerce.number().int().min(10).max(100).default(50),
 });
 
 export const env = schema.parse(process.env);
