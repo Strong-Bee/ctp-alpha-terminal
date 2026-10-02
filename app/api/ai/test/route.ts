@@ -71,7 +71,7 @@ export async function POST(request: Request) {
 
     if (reasoningEffort !== "none") requestBody.reasoning_effort = reasoningEffort;
     if (body.enableThinking ?? saved?.enableThinking ?? true) {
-      requestBody.extra_body = { chat_template_kwargs: { enable_thinking: true } };
+      requestBody.chat_template_kwargs = { enable_thinking: true };
     }
 
     const response = await fetch(baseUrl + "/chat/completions", {
