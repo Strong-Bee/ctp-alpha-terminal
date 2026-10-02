@@ -56,12 +56,35 @@ app.use("/api/v1/events", eventsRouter);
 
 app.use((_req, res) => res.status(404).json({ error: "Not found" }));
 
-const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
-  const message = error instanceof Error ? error.message : "Internal server error";
+const errorHandler: ErrorRequestHandler = (error, req, res, _next) => {
   if (res.headersSent) return;
-  res.status(500).json({
+
+  const message = error instanceof Error ? error.message : "Internal server error";
+  const isJsonSyntaxError =
+    error instanceof SyntaxError &&
+    typeof (error as { status?: unknown }).status === "number" &&
+    (error as { status?: number }).status === 400;
+
+  if (isJsonSyntaxError) {
+    return res.status(400).json({
+      error: "Invalid JSON body",
+      message: env.NODE_ENV === "production" ? "Request body is not valid JSON" : message,
+      path: req.path,
+    });
+  }
+
+  console.error("[CTP API] Unhandled request error", {
+    method: req.method,
+    path: req.path,
+    message,
+  });
+
+  return res.status(500).json({
     error: "Internal server error",
     message: env.NODE_ENV === "production" ? "Request failed" : message,
+    path: req.path,
+    method: req.method,
+    timestamp: new Date().toISOString(),
   });
 };
 
