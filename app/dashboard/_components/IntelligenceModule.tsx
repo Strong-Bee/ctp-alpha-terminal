@@ -164,6 +164,51 @@ function LiveNewsModule({ intel }: { intel: IntelResponse | null }) {
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(280px,1fr)]"><Section title="Realtime News Feed">{news.length ? <NewsList news={news}/> : <EmptyState title="News feed kosong"/>}</Section><div className="space-y-5"><Section title="Source Monitor"><div className="space-y-2">{(intel?.sources ?? []).map((s)=><div key={s} className="flex justify-between rounded-lg border border-white/5 px-3 py-2 text-xs"><span className="text-slate-300">{s}</span><span className="text-emerald-400">online</span></div>)}</div></Section><Section title="News Intelligence"><div className="space-y-2">{["Catalyst detection","Narrative extraction","Duplicate filtering","Security / macro classification"].map(x=><div key={x} className="rounded-lg bg-white/[.02] px-3 py-2 text-xs text-slate-400">{x}</div>)}</div></Section></div></div>
   </div>;
 }
+function Pagination({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (page: number) => void }) {
+  if (totalPages <= 1) return null;
+  const pages = Array.from({ length: totalPages }, (_, i) => i + 1).filter((p) =>
+    p === 1 || p === totalPages || Math.abs(p - page) <= 1
+  );
+  const items: Array<number | "ellipsis"> = [];
+  pages.forEach((p, i) => {
+    if (i > 0 && p - pages[i - 1] > 1) items.push("ellipsis");
+    items.push(p);
+  });
+  return <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-white/5 pt-3">
+    <span className="text-[10px] text-slate-600">Page {page} / {totalPages}</span>
+    <div className="flex items-center gap-1">
+      <button disabled={page === 1} onClick={() => onChange(page - 1)} className="rounded-lg border border-white/10 px-2.5 py-1.5 text-[10px] text-slate-400 disabled:opacity-30 hover:bg-white/5">Prev</button>
+      {items.map((item, index) => item === "ellipsis"
+        ? <span key={"e-" + index} className="px-1 text-[10px] text-slate-700">…</span>
+        : <button key={item} onClick={() => onChange(item)} className={"min-w-7 rounded-lg border px-2 py-1.5 text-[10px] " + (item === page ? "border-cyan-400/30 bg-cyan-400/10 text-cyan-200" : "border-white/10 text-slate-500 hover:bg-white/5 hover:text-white")}>{item}</button>
+      )}
+      <button disabled={page === totalPages} onClick={() => onChange(page + 1)} className="rounded-lg border border-white/10 px-2.5 py-1.5 text-[10px] text-slate-400 disabled:opacity-30 hover:bg-white/5">Next</button>
+    </div>
+  </div>;
+}
+
+function PaginatedNewsList({ news, pageSize = 10 }: { news: NewsItem[]; pageSize?: number }) {
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(news.length / pageSize));
+  useEffect(() => setPage((current) => Math.min(current, totalPages)), [totalPages]);
+  const visible = news.slice((page - 1) * pageSize, page * pageSize);
+  return <div>
+    <NewsList news={visible}/>
+    <Pagination page={page} totalPages={totalPages} onChange={setPage}/>
+  </div>;
+}
+
+function PaginatedMarketTable({ markets, pageSize = 10 }: { markets: MarketItem[]; pageSize?: number }) {
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(markets.length / pageSize));
+  useEffect(() => setPage((current) => Math.min(current, totalPages)), [totalPages]);
+  const visible = markets.slice((page - 1) * pageSize, page * pageSize);
+  return <div>
+    <MarketTable markets={visible}/>
+    <Pagination page={page} totalPages={totalPages} onChange={setPage}/>
+  </div>;
+}
+
 function MarketTable({ markets }: { markets: MarketItem[] }) {
   return <div className="min-w-0 overflow-x-auto rounded-xl border border-white/5">
     <table className="w-full min-w-[720px] text-left text-xs">
