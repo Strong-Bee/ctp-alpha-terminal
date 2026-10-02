@@ -11,7 +11,7 @@ import {
 type ModuleKey =
   | "overview" | "ai" | "live-news" | "markets" | "narratives" | "alpha-signals" | "launches"
   | "on-chain" | "wallet-intel" | "defi" | "risk-engine" | "order-flow" | "macro"
-  | "cycles" | "thesis" | "alerts" | "settings";
+  | "cycles" | "thesis" | "alerts" | "settings" | "trading-terminal";
 
 type NewsItem = {
   id: string; source: string; title: string; url: string; summary: string;
@@ -27,6 +27,7 @@ type IntelResponse = {
 };
 
 const navigation = [
+  ["Trading Terminal","/dashboard/trading-terminal",Activity,"trading-terminal"],
   ["Overview","/dashboard",LayoutDashboard,"overview"],
   ["AI Assistant","/dashboard/ai",BrainCircuit,"ai"],
   ["Live News","/dashboard/live-news",Newspaper,"live-news"],
@@ -64,6 +65,7 @@ const meta: Record<ModuleKey, { eyebrow: string; title: string; description: str
   thesis: { eyebrow: "Research Workspace", title: "Thesis", description: "Menyusun dan menguji thesis dengan evidence, catalyst, target, dan invalidation." },
   alerts: { eyebrow: "Alert Center", title: "Alerts", description: "Pusat event monitoring untuk price, volume, liquidity, wallet, news, macro, dan risk." },
   settings: { eyebrow: "System", title: "Settings", description: "Status API, data sources, AI provider, refresh interval, dan notification configuration." },
+  "trading-terminal": { eyebrow: "Execution Workspace", title: "Trading Terminal", description: "Workspace terpadu untuk chart, watchlist, market overview, economic calendar, alpha signal, dan live crypto news." },
 };
 
 function AIAssistantModule() {
@@ -245,6 +247,134 @@ function TradingViewChart({ symbol = "BINANCE:BTCUSDT", height = 560 }: { symbol
       </div>
     </div>
   );
+}
+
+function EconomicCalendarWidget() {
+  const [host, setHost] = useState<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!host) return;
+    host.innerHTML = "";
+    const widget = document.createElement("div");
+    widget.className = "tradingview-widget-container__widget";
+    widget.style.height = "100%";
+    widget.style.width = "100%";
+    const script = document.createElement("script");
+    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-events.js";
+    script.type = "text/javascript";
+    script.async = true;
+    script.text = JSON.stringify({
+      colorTheme: "dark",
+      isTransparent: true,
+      width: "100%",
+      height: 520,
+      locale: "en",
+      importanceFilter: "-1,0,1",
+      countryFilter: "us,eu,gb,jp,cn,au,ca",
+    });
+    host.appendChild(widget);
+    host.appendChild(script);
+    return () => { host.innerHTML = ""; };
+  }, [host]);
+  return <div ref={setHost} className="tradingview-widget-container w-full" style={{ height: 520 }} />;
+}
+
+function TradingTerminalModule({ intel }: { intel: IntelResponse | null }) {
+  const markets = intel?.markets ?? [];
+  const news = intel?.news ?? [];
+  const [symbol, setSymbol] = useState("BINANCE:BTCUSDT");
+  const [signal, setSignal] = useState<"LONG" | "SHORT" | "WATCH">("WATCH");
+
+  const watchlist = ["BTC","ETH","SOL","BNB","XRP"].map((ticker) => markets.find((m) => m.symbol === ticker)).filter(Boolean) as MarketItem[];
+  const btc = markets.find((m) => m.symbol === "BTC");
+  const eth = markets.find((m) => m.symbol === "ETH");
+  const sol = markets.find((m) => m.symbol === "SOL");
+  const avgChange = markets.length ? markets.reduce((sum, m) => sum + m.change24h, 0) / markets.length : 0;
+  const positiveCount = markets.filter((m) => m.change24h > 0).length;
+  const breadth = markets.length ? positiveCount / markets.length : 0;
+
+  useEffect(() => {
+    if (!markets.length) {
+      setSignal("WATCH");
+      return;
+    }
+    if (breadth >= 0.7 && avgChange > 0.5) setSignal("LONG");
+    else if (breadth <= 0.3 && avgChange < -0.5) setSignal("SHORT");
+    else setSignal("WATCH");
+  }, [markets.length, breadth, avgChange]);
+
+  const symbolMap: Record<string, string> = {
+    BTC: "BINANCE:BTCUSDT",
+    ETH: "BINANCE:ETHUSDT",
+    SOL: "BINANCE:SOLUSDT",
+    BNB: "BINANCE:BNBUSDT",
+    XRP: "BINANCE:XRPUSDT",
+  };
+
+  const positive = avgChange >= 0;
+  return <div className="space-y-4">
+    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+      <Kpi label="Regime" value={avgChange > 0.5 ? "RISK-ON" : avgChange < -0.5 ? "RISK-OFF" : "NEUTRAL"} detail="market breadth"/>
+      <Kpi label="BTC" value={btc ? formatPrice(btc.price) : "—"} detail={btc ? (btc.change24h >= 0 ? "+" : "") + btc.change24h.toFixed(2) + "% 24h" : "no data"}/>
+      <Kpi label="ETH" value={eth ? formatPrice(eth.price) : "—"} detail={eth ? (eth.change24h >= 0 ? "+" : "") + eth.change24h.toFixed(2) + "% 24h" : "no data"}/>
+      <Kpi label="SOL" value={sol ? formatPrice(sol.price) : "—"} detail={sol ? (sol.change24h >= 0 ? "+" : "") + sol.change24h.toFixed(2) + "% 24h" : "no data"}/>
+      <Kpi label="Breadth" value={markets.length ? Math.round(breadth * 100) + "%" : "—"} detail={positiveCount + "/" + markets.length + " assets positive"}/>
+    </div>
+
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+      <Section title="TradingView Chart">
+        <TradingViewChart symbol={symbol} height={620}/>
+      </Section>
+      <Section title="Watchlist">
+        <div className="space-y-2">
+          {watchlist.map((market) => {
+            const active = symbol === symbolMap[market.symbol];
+            const up = market.change24h >= 0;
+            return <button key={market.id} onClick={() => setSymbol(symbolMap[market.symbol])} className={"w-full rounded-xl border p-3 text-left transition " + (active ? "border-cyan-400/30 bg-cyan-400/[.06]" : "border-white/5 bg-white/[.02] hover:border-white/10")}>
+              <div className="flex items-center justify-between gap-3">
+                <div><div className="text-sm font-bold text-slate-200">{market.symbol}</div><div className="mt-0.5 text-[10px] text-slate-600">{market.name}</div></div>
+                <div className="text-right"><div className="font-mono text-xs text-slate-300">{formatPrice(market.price)}</div><div className={"mt-0.5 font-mono text-[10px] " + (up ? "text-emerald-400" : "text-rose-400")}>{up ? "+" : ""}{market.change24h.toFixed(2)}%</div></div>
+              </div>
+            </button>;
+          })}
+          {!watchlist.length && <EmptyState title="Watchlist belum memiliki market data"/>}
+        </div>
+      </Section>
+    </div>
+
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(300px,1fr)]">
+      <Section title="Market Overview">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[620px] text-left text-xs">
+            <thead className="border-b border-white/5 text-[10px] uppercase tracking-wider text-slate-600">
+              <tr><th className="px-3 py-2">Asset</th><th className="px-3 py-2">Price</th><th className="px-3 py-2">24h</th><th className="px-3 py-2">MCap</th><th className="px-3 py-2">Volume</th></tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {markets.slice(0, 10).map((m) => <tr key={m.id} className="hover:bg-white/[.02]"><td className="px-3 py-2.5 font-semibold text-slate-300">{m.symbol}</td><td className="px-3 py-2.5 font-mono text-slate-400">{formatPrice(m.price)}</td><td className={"px-3 py-2.5 font-mono " + (m.change24h >= 0 ? "text-emerald-400" : "text-rose-400")}>{m.change24h >= 0 ? "+" : ""}{m.change24h.toFixed(2)}%</td><td className="px-3 py-2.5 font-mono text-slate-500">{formatUsd(m.marketCap)}</td><td className="px-3 py-2.5 font-mono text-slate-500">{formatUsd(m.volume24h)}</td></tr>)}
+            </tbody>
+          </table>
+          {!markets.length && <EmptyState title="Market overview belum tersedia"/>}
+        </div>
+      </Section>
+      <Section title="Alpha Signal">
+        <div className="rounded-2xl border border-cyan-400/10 bg-cyan-400/[.025] p-4">
+          <div className="flex items-center justify-between"><span className="text-[10px] uppercase tracking-[.2em] text-slate-600">Deterministic terminal signal</span><span className={"rounded-full border px-2.5 py-1 text-[10px] font-bold " + (signal === "LONG" ? "border-emerald-400/20 text-emerald-400" : signal === "SHORT" ? "border-rose-400/20 text-rose-400" : "border-amber-400/20 text-amber-400")}>{signal}</span></div>
+          <div className="mt-4 space-y-2">
+            {[["Market breadth", Math.round(breadth * 100) + "%"],["Average 24h change", (positive ? "+" : "") + avgChange.toFixed(2) + "%"],["News corpus", String(news.length)],["Data status", intel ? "LIVE" : "NO DATA"]].map(([label,value]) => <div key={label} className="flex items-center justify-between rounded-lg border border-white/5 px-3 py-2 text-xs"><span className="text-slate-500">{label}</span><span className="font-mono text-slate-300">{value}</span></div>)}
+          </div>
+          <div className="mt-4 text-[10px] leading-5 text-slate-600">Signal ini hanya merangkum data terminal yang tersedia. Ia bukan rekomendasi trading dan tidak menggunakan data TradingView sebagai sumber keputusan otomatis.</div>
+        </div>
+      </Section>
+    </div>
+
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(300px,1fr)]">
+      <Section title="Economic Calendar">
+        <EconomicCalendarWidget/>
+      </Section>
+      <Section title="Live Crypto News">
+        {news.length ? <NewsList news={news.slice(0, 12)}/> : <EmptyState title="News feed kosong"/>}
+      </Section>
+    </div>
+  </div>;
 }
 
 function MarketsModule({ intel }: { intel: IntelResponse | null }) {
