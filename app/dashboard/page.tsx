@@ -120,7 +120,8 @@ export default function DashboardPage() {
           <div className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.25em] text-slate-600">Intelligence</div>
           <div className="space-y-1">
             {navigation.map(({ label, icon: Icon }) => (
-              <button key={label} onClick={() => { setActive(label); setMobileOpen(false); }}
+              <Link key={label} href={label === "Overview" ? "/dashboard" : `/dashboard/${label.toLowerCase().replaceAll(" ", "-")}`}
+                onClick={() => setMobileOpen(false)}
                 title={collapsed ? label : undefined}
                 className={[
                   "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition",
@@ -128,7 +129,7 @@ export default function DashboardPage() {
                 ].join(" ")}>
                 <Icon size={17} className="shrink-0" />
                 {!collapsed && <span className="truncate">{label}</span>}
-              </button>
+              </Link>
             ))}
           </div>
         </nav>
