@@ -9,6 +9,8 @@ import { dashboardRouter } from "./routes/dashboard.js";
 import { dexRouter } from "./routes/dex.js";
 import { healthRouter } from "./routes/health.js";
 import { newsRouter } from "./routes/news.js";
+import { realtimeRouter } from "./routes/realtime.js";
+import { macroRouter } from "./routes/macro.js";
 
 export const app = express();
 app.disable("x-powered-by");
@@ -38,4 +40,6 @@ app.use("/api/v1/ai", aiRouter);
 app.use("/api/v1/dashboard", dashboardRouter);
 app.use("/api/v1/dex", dexRouter);
 app.use("/api/v1/news", newsRouter);
+app.use("/api/v1/realtime", realtimeRouter);
+app.use("/api/v1/macro", macroRouter);
 app.use((_req, res) => res.status(404).json({ error: "Not found" }));
