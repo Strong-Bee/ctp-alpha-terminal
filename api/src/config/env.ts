@@ -11,6 +11,7 @@ const schema = z.object({
   NVIDIA_BASE_URL: z.string().url().default("https://integrate.api.nvidia.com/v1"),
   NVIDIA_MODEL: z.string().min(1).default("nvidia/nemotron-3-ultra-550b-a55b"),
   NVIDIA_ENABLE_THINKING: z.coerce.boolean().default(true),
+  NVIDIA_TIMEOUT_MS: z.coerce.number().int().positive().default(120000),
 });
 
 export const env = schema.parse(process.env);
