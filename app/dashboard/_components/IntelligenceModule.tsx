@@ -162,6 +162,38 @@ function LiveNewsModule({ intel }: { intel: IntelResponse | null }) {
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(280px,1fr)]"><Section title="Realtime News Feed">{news.length ? <NewsList news={news}/> : <EmptyState title="News feed kosong"/>}</Section><div className="space-y-5"><Section title="Source Monitor"><div className="space-y-2">{(intel?.sources ?? []).map((s)=><div key={s} className="flex justify-between rounded-lg border border-white/5 px-3 py-2 text-xs"><span className="text-slate-300">{s}</span><span className="text-emerald-400">online</span></div>)}</div></Section><Section title="News Intelligence"><div className="space-y-2">{["Catalyst detection","Narrative extraction","Duplicate filtering","Security / macro classification"].map(x=><div key={x} className="rounded-lg bg-white/[.02] px-3 py-2 text-xs text-slate-400">{x}</div>)}</div></Section></div></div>
   </div>;
 }
+function MarketTable({ markets }: { markets: MarketItem[] }) {
+  return <div className="min-w-0 overflow-x-auto rounded-xl border border-white/5">
+    <table className="w-full min-w-[720px] text-left text-xs">
+      <thead className="border-b border-white/5 bg-white/[.02] text-[10px] uppercase tracking-wider text-slate-600">
+        <tr>
+          <th className="px-3 py-3">Asset</th>
+          <th className="px-3 py-3">Price</th>
+          <th className="px-3 py-3">24h</th>
+          <th className="px-3 py-3">Market Cap</th>
+          <th className="px-3 py-3">Volume 24h</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-white/5">
+        {markets.map((market) => {
+          const positive = market.change24h >= 0;
+          return <tr key={market.id} className="transition hover:bg-white/[.025]">
+            <td className="px-3 py-3">
+              <div className="font-semibold text-slate-200">{market.symbol}</div>
+              <div className="mt-0.5 text-[10px] text-slate-600">{market.name}</div>
+            </td>
+            <td className="px-3 py-3 font-mono text-slate-300">{formatPrice(market.price)}</td>
+            <td className={"px-3 py-3 font-mono " + (positive ? "text-emerald-400" : "text-rose-400")}>
+              {positive ? "+" : ""}{market.change24h.toFixed(2)}%
+            </td>
+            <td className="px-3 py-3 font-mono text-slate-400">{formatUsd(market.marketCap)}</td>
+            <td className="px-3 py-3 font-mono text-slate-400">{formatUsd(market.volume24h)}</td>
+          </tr>;
+        })}
+      </tbody>
+    </table>
+  </div>;
+}
 function MarketsModule({ intel }: { intel: IntelResponse | null }) {
   const markets = intel?.markets ?? [];
   const gainers = [...markets].sort((a,b)=>b.change24h-a.change24h).slice(0,5);
