@@ -70,15 +70,15 @@ const meta: Record<ModuleKey, { eyebrow: string; title: string; description: str
 };
 
 function AIAssistantModule() {
-  const [message,setMessage]=useState("");
-  const [answer,setAnswer]=useState("");
-  const [loading,setLoading]=useState(false);
   const [testing,setTesting]=useState(false);
+  const [answer,setAnswer]=useState("");
   const [error,setError]=useState("");
-  const [notice,setNotice]=useState("");
   const [settings,setSettings]=useState({
-    provider:"nvidia", baseUrl:"https://integrate.api.nvidia.com/v1", model:"nvidia/nemotron-3-ultra-550b-a55b",
-    apiKeyConfigured:false, enableThinking:true, reasoningEffort:"medium", temperature:0.15, maxTokens:4096,
+    provider:"nvidia",
+    baseUrl:"https://integrate.api.nvidia.com/v1",
+    model:"nvidia/nemotron-3-ultra-550b-a55b",
+    apiKeyConfigured:false,
+    reasoningEffort:"medium",
   });
 
   const parseJsonResponse = async (response: Response): Promise<Record<string, any>> => {
@@ -96,31 +96,24 @@ function AIAssistantModule() {
       setSettings(v=>({...v,...data.settings}));
     }catch(e){setError(e instanceof Error?e.message:"Failed to load AI settings");}
   },[]);
+
   useEffect(()=>{void loadSettings();},[loadSettings]);
 
   const testModel=async()=>{
     if(testing)return;
-    setTesting(true);setError("");setNotice("");setAnswer("");
+    setTesting(true);
+    setError("");
+    setAnswer("");
     try{
       const r=await fetch("/api/ai/test",{method:"POST",credentials:"same-origin",cache:"no-store",headers:{"Content-Type":"application/json","Accept":"application/json"}});
       const data=await parseJsonResponse(r);
       if(!r.ok) throw new Error(data.error||("Connection test failed (HTTP "+r.status+")"));
       setAnswer(data.answer||"CTP AI connection OK");
-      setNotice("Model connection berhasil • "+String(data.latencyMs??"—")+" ms • "+String(data.model||settings.model));
-    }catch(e){setError(e instanceof Error?e.message:"Connection test failed");}
-    finally{setTesting(false);}
-  };
-
-  const send=async()=>{
-    if(!message.trim()||loading)return;
-    setLoading(true);setError("");setNotice("");
-    try{
-      const r=await fetch("/api/ai/chat",{method:"POST",credentials:"same-origin",cache:"no-store",headers:{"Content-Type":"application/json"},body:JSON.stringify({message})});
-      const data=await parseJsonResponse(r);
-      if(!r.ok) throw new Error(data.error||"AI request failed");
-      setAnswer(data.answer||"AI returned an empty answer");
-    }catch(e){setError(e instanceof Error?e.message:"AI request failed");}
-    finally{setLoading(false);}
+    }catch(e){
+      setError(e instanceof Error?e.message:"Connection test failed");
+    }finally{
+      setTesting(false);
+    }
   };
 
   return <div className="space-y-5">
@@ -131,30 +124,23 @@ function AIAssistantModule() {
       <Kpi label="Reasoning" value={settings.reasoningEffort.toUpperCase()}/>
     </div>
 
-    <Section title="AI Model Settings">
+    <Section title="AI Model Status">
       <div className="grid gap-4 md:grid-cols-2">
-        <label className="text-xs text-slate-500">Provider
-          <input value={settings.provider.toUpperCase()} readOnly className="mt-2 w-full rounded-xl border border-white/10 bg-[#0a0e15] px-3 py-3 text-sm text-slate-300"/>
-        </label>
-        <label className="text-xs text-slate-500">Model
-          <input value={settings.model} readOnly className="mt-2 w-full rounded-xl border border-white/10 bg-[#0a0e15] px-3 py-3 text-sm text-slate-300"/>
-        </label>
-        <label className="text-xs text-slate-500 md:col-span-2">Base URL
-          <input value={settings.baseUrl} readOnly className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-slate-300"/>
-        </label>
-        <div className="md:col-span-2 rounded-xl border border-cyan-400/10 bg-cyan-400/[.03] p-4 text-xs leading-5 text-slate-400">
-          API key dan konfigurasi AI dibaca dari <code className="text-cyan-300">.env.local</code> / <code className="text-cyan-300">.env</code> di server. API key tidak pernah dikirim ke browser.
+        <div className="rounded-xl border border-white/5 bg-white/[.02] p-4">
+          <div className="text-[10px] uppercase tracking-wider text-slate-600">Provider</div>
+          <div className="mt-2 text-sm font-semibold text-slate-200">{settings.provider.toUpperCase()}</div>
         </div>
-        <label className="text-xs text-slate-500">Reasoning
-          <input value={settings.reasoningEffort.toUpperCase()} readOnly className="mt-2 w-full rounded-xl border border-white/10 bg-[#0a0e15] px-3 py-3 text-sm text-slate-300"/>
-        </label>
-        <label className="text-xs text-slate-500">Temperature
-          <input value={settings.temperature} readOnly className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-slate-300"/>
-        </label>
-        <label className="text-xs text-slate-500">Max Tokens
-          <input value={settings.maxTokens} readOnly className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-slate-300"/>
-        </label>
-        <label className="flex items-center gap-2 text-xs text-slate-400"><input type="checkbox" checked={settings.enableThinking} readOnly className="accent-cyan-300"/> Enable thinking</label>
+        <div className="rounded-xl border border-white/5 bg-white/[.02] p-4">
+          <div className="text-[10px] uppercase tracking-wider text-slate-600">Model</div>
+          <div className="mt-2 break-all text-sm font-semibold text-slate-200">{settings.model}</div>
+        </div>
+        <div className="rounded-xl border border-white/5 bg-white/[.02] p-4 md:col-span-2">
+          <div className="text-[10px] uppercase tracking-wider text-slate-600">Endpoint</div>
+          <div className="mt-2 break-all text-sm text-slate-400">{settings.baseUrl}</div>
+        </div>
+        <div className="rounded-xl border border-cyan-400/10 bg-cyan-400/[.03] p-4 text-xs leading-5 text-slate-400 md:col-span-2">
+          AI dikonfigurasi dari ENV server. API key tidak ditampilkan dan tidak dikirim ke browser.
+        </div>
       </div>
       <div className="mt-4 flex flex-wrap gap-3">
         <button type="button" onClick={()=>void loadSettings()} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs font-semibold text-slate-300">Reload ENV</button>
@@ -162,14 +148,11 @@ function AIAssistantModule() {
       </div>
     </Section>
 
-    <Section title="CTP Alpha AI">
-      <div className="rounded-2xl border border-cyan-400/10 bg-cyan-400/[.025] p-4 sm:p-6">
-        <div className="mb-4 text-sm text-slate-400">Konfigurasi AI terpusat melalui ENV server. Setelah mengubah .env, restart Next.js agar konfigurasi baru terbaca.</div>
-        <textarea value={message} onChange={e=>setMessage(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();void send();}}} placeholder="Contoh: Analisis BTC berdasarkan news dan market data saat ini..." className="min-h-32 w-full resize-y rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-white outline-none placeholder:text-slate-700 focus:border-cyan-400/30"/>
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><span className="text-[10px] text-slate-600">Enter untuk kirim • Shift+Enter untuk baris baru</span><button disabled={loading||!message.trim()||!settings.apiKeyConfigured} onClick={()=>void send()} className="rounded-xl bg-cyan-400 px-4 py-2.5 text-sm font-bold text-black disabled:cursor-not-allowed disabled:opacity-40">{loading?"Analyzing…":"Ask Alpha AI"}</button></div>
-      </div>
-    </Section>
-    {(error||answer||notice)&&<Section title="AI Response">{error?<div className="rounded-xl border border-rose-400/10 bg-rose-400/[.03] p-4 text-sm leading-6 text-rose-300">{error}</div>:notice?<div className="rounded-xl border border-emerald-400/10 bg-emerald-400/[.03] p-4 text-sm text-emerald-300">{notice}</div>:<div className="whitespace-pre-wrap rounded-xl border border-white/5 bg-black/20 p-4 text-sm leading-7 text-slate-300">{answer}</div>}</Section>}
+    {(error||answer)&&<Section title="AI Response">
+      {error
+        ? <div className="rounded-xl border border-rose-400/10 bg-rose-400/[.03] p-4 text-sm leading-6 text-rose-300">{error}</div>
+        : <div className="whitespace-pre-wrap rounded-xl border border-white/5 bg-black/20 p-4 text-sm leading-7 text-slate-300">{answer}</div>}
+    </Section>}
   </div>;
 }
 const formatUsd = (value: number) => {
