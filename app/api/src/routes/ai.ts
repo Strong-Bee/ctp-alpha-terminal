@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { env } from "../config/env.js";
+import { getCryptoIntel, newsToAiContext } from "../services/crypto-intel.js";
 import { nvidiaChat } from "../services/nvidia.js";
 
 const router = Router();
@@ -8,6 +9,7 @@ const router = Router();
 const chatSchema = z.object({
   message: z.string().min(1).max(12000),
   context: z.string().max(20000).optional(),
+  includeLiveNews: z.boolean().default(true),
   temperature: z.number().min(0).max(1).optional(),
   maxTokens: z.number().int().min(64).max(32768).optional(),
   reasoningEffort: z.enum(["none", "medium", "high"]).optional(),
@@ -20,25 +22,41 @@ const alphaSchema = z.object({
   walletIntel: z.string().max(12000).optional(),
   narrative: z.string().max(12000).optional(),
   risk: z.string().max(12000).optional(),
+  includeLiveNews: z.boolean().default(true),
 });
 
 const ALPHA_SYSTEM_PROMPT = `You are CTP Alpha AI, the analytical assistant inside CTP Alpha Terminal.
 
-Your job is to interpret structured crypto market, on-chain, wallet, narrative, liquidity, macro and risk data. Do not invent missing data. Clearly separate observed data from inference. Never present an AI opinion as a guaranteed trade outcome.
+You are a crypto market-intelligence system, not a hype generator. Use current terminal data when supplied and never invent missing facts. Separate:
+- OBSERVED: directly supplied market/on-chain/news data
+- INFERENCE: reasoned interpretation
+- UNKNOWN: data that is missing or stale
+
+For live news, treat headlines as unverified until corroborated. Prefer multiple independent sources, flag conflicting reports, and include timestamps/source names. Do not turn a headline into a trade signal without market/on-chain confirmation.
 
 When analyzing an asset, structure the response as:
 1. Market regime
-2. Narrative/catalyst
+2. Current news / narrative
 3. On-chain evidence
-4. Smart-money/wallet evidence
-5. Liquidity and manipulation risks
+4. Smart-money / wallet evidence
+5. Liquidity / manipulation risks
 6. Bull case
 7. Bear case
-8. Invalidations
+8. Invalidation
 9. Risk notes
 10. Data gaps
 
-Use concise trading terminology. Prefer evidence and explicit uncertainty over hype.`;
+For normal chat, answer directly but preserve the same evidence discipline. Never claim you browsed a page you did not receive. Never present a guaranteed outcome.`;
+
+async function liveNewsContext(enabled: boolean) {
+  if (!enabled) return "";
+  try {
+    const intel = await getCryptoIntel();
+    return newsToAiContext(intel.news, 15);
+  } catch {
+    return "";
+  }
+}
 
 router.get("/health", (_req, res) => {
   res.json({
@@ -47,6 +65,7 @@ router.get("/health", (_req, res) => {
     baseUrl: env.NVIDIA_BASE_URL,
     model: env.NVIDIA_MODEL,
     timeoutMs: env.NVIDIA_TIMEOUT_MS,
+    liveNews: true,
   });
 });
 
@@ -57,15 +76,21 @@ router.post("/chat", async (req, res) => {
   }
 
   try {
+    const newsContext = await liveNewsContext(parsed.data.includeLiveNews);
+    const terminalContext = [
+      parsed.data.context ? `Terminal context:\n${parsed.data.context}` : "",
+      newsContext ? `LIVE CRYPTO NEWS SNAPSHOT:\n${newsContext}` : "",
+    ].filter(Boolean).join("\n\n");
+
+    const messages = [
+      { role: "system" as const, content: ALPHA_SYSTEM_PROMPT },
+      ...(terminalContext ? [{ role: "system" as const, content: terminalContext }] : []),
+      { role: "user" as const, content: parsed.data.message },
+    ];
+
     const result = await nvidiaChat({
-      messages: [
-        { role: "system", content: ALPHA_SYSTEM_PROMPT },
-        ...(parsed.data.context
-          ? [{ role: "system" as const, content: `Terminal context:\n${parsed.data.context}` }]
-          : []),
-        { role: "user", content: parsed.data.message },
-      ],
-      temperature: parsed.data.temperature ?? 0.2,
+      messages,
+      temperature: parsed.data.temperature ?? 0.15,
       maxTokens: parsed.data.maxTokens ?? 4096,
       reasoningEffort: parsed.data.reasoningEffort ?? "medium",
     });
@@ -75,6 +100,7 @@ router.post("/chat", async (req, res) => {
       model: result.model,
       answer: result.content,
       usage: result.usage,
+      liveNews: Boolean(newsContext),
     });
   } catch (error) {
     return res.status(502).json({
@@ -91,6 +117,7 @@ router.post("/alpha-analysis", async (req, res) => {
   }
 
   const data = parsed.data;
+  const newsContext = await liveNewsContext(data.includeLiveNews);
   const context = [
     `Asset: ${data.asset}`,
     data.market && `Market:\n${data.market}`,
@@ -98,6 +125,7 @@ router.post("/alpha-analysis", async (req, res) => {
     data.walletIntel && `Wallet intelligence:\n${data.walletIntel}`,
     data.narrative && `Narrative/catalyst:\n${data.narrative}`,
     data.risk && `Risk:\n${data.risk}`,
+    newsContext && `LIVE CRYPTO NEWS:\n${newsContext}`,
   ].filter(Boolean).join("\n\n");
 
   try {
@@ -117,6 +145,7 @@ router.post("/alpha-analysis", async (req, res) => {
       asset: data.asset,
       analysis: result.content,
       usage: result.usage,
+      liveNews: Boolean(newsContext),
     });
   } catch (error) {
     return res.status(502).json({
