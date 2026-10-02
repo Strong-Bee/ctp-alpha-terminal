@@ -10,7 +10,7 @@ type SearchResult = {
   description?: string;
   content?: string;
   publishedDate?: string;
-  engine?: string;
+  engine?: string | string[];
 };
 
 const buildQueries = (message: string) => [
@@ -19,14 +19,18 @@ const buildQueries = (message: string) => [
   message + " risks counterarguments technical analysis",
 ];
 
-async function searxngSearch(query: string): Promise<SearchResult[]> {
+async function searxngSearch(query: string, page = 1): Promise<SearchResult[]> {
   const baseUrl = (process.env.SEARXNG_URL || "").replace(/\/$/, "");
   if (!baseUrl) throw new Error("SEARXNG_URL belum diatur di .env.local/.env untuk Deep Search");
   const url = new URL(baseUrl + "/search");
   url.searchParams.set("q", query);
   url.searchParams.set("format", "json");
-  url.searchParams.set("language", "en");
-  url.searchParams.set("safesearch", "0");
+  url.searchParams.set("language", process.env.SEARXNG_LANGUAGE || "en");
+  url.searchParams.set("categories", process.env.SEARXNG_CATEGORIES || "general,news");
+  url.searchParams.set("safesearch", process.env.SEARXNG_SAFESEARCH || "0");
+  url.searchParams.set("pageno", String(page));
+  const timeRange = process.env.SEARXNG_TIME_RANGE;
+  if (timeRange && ["day", "month", "year"].includes(timeRange)) url.searchParams.set("time_range", timeRange);
   const response = await fetch(url, {
     headers: { Accept: "application/json", "User-Agent": "CTP-Alpha-Terminal/1.0" },
     cache: "no-store",
@@ -124,10 +128,15 @@ export async function POST(request: Request) {
   if (!searxngUrl) return NextResponse.json({ error: "SEARXNG_URL belum diatur di .env.local/.env untuk Deep Search" }, { status: 400 });
 
   try {
-    const results = (await Promise.all(buildQueries(message).map(query => searxngSearch(query))).flat())
+    const pages = Math.min(Math.max(Number(process.env.SEARXNG_PAGES || 1), 1), 3);
+    const maxResults = Math.min(Math.max(Number(process.env.SEARXNG_MAX_RESULTS || 12), 1), 30);
+    const queryResults = await Promise.all(
+      buildQueries(message).flatMap(query => Array.from({ length: pages }, (_, index) => searxngSearch(query, index + 1))),
+    );
+    const results = queryResults.flat()
       .filter(item => item.url)
       .filter((item, index, arr) => arr.findIndex(x => x.url === item.url) === index)
-      .slice(0, 12);
+      .slice(0, maxResults);
 
     if (!results.length) return NextResponse.json({ error: "Deep Search tidak menemukan sumber yang relevan" }, { status: 502 });
 
