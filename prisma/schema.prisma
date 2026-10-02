@@ -67,3 +67,15 @@ model UserAISettings {
   updatedAt DateTime @updatedAt
   @@index([userEmail])
 }
+
+model AIChatSession {
+  id String @id @default(cuid())
+  userEmail String
+  title String
+  messages Json
+  model String?
+  deepSearch Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([userEmail, updatedAt])
+}
