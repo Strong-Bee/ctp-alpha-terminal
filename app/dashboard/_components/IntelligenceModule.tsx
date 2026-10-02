@@ -149,6 +149,29 @@ function OverviewModule({ intel }: { intel: IntelResponse | null }) {
   return <div className="space-y-5"><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Kpi label="Market Breadth" value={markets.length ? (avg>=0?"+":"")+avg.toFixed(2)+"%" : "—"} detail="average 24h change"/><Kpi label="Live Stories" value={String(news.length)} detail="multi-source news"/><Kpi label="BTC" value={btc ? formatPrice(btc.price)+" "+(btc.change24h>=0?"+":"")+btc.change24h.toFixed(2)+"%" : "—"}/><Kpi label="ETH / SOL" value={eth&&sol ? eth.change24h.toFixed(1)+"% / "+sol.change24h.toFixed(1)+"%" : "—"} detail="24h change"/></div><div className="grid gap-5 xl:grid-cols-[1.25fr_1fr]"><Section title="Alpha Pipeline"><div className="grid gap-2 sm:grid-cols-2">{["Live news discovery","Market confirmation","Narrative extraction","Liquidity / momentum","Risk validation","Thesis review"].map((x,i)=><div key={x} className="rounded-xl border border-white/5 p-3"><div className="text-[10px] text-slate-600">0{i+1}</div><div className="mt-1 text-sm text-slate-300">{x}</div></div>)}</div></Section><Section title="Latest Intelligence">{news.length ? <NewsList news={news.slice(0,7)}/> : <EmptyState/>}</Section></div></div>;
 }
 function OperationalModule({ module, intel }: { module: ModuleKey; intel: IntelResponse | null }) {
+  const [launches, setLaunches] = useState<Record<string, unknown> | null>(null);
+  const [launchError, setLaunchError] = useState("");
+  useEffect(() => {
+    if (module !== "launches") return;
+    const loadLaunches = async () => {
+      try {
+        const endpoints = ["token-profiles/latest", "token-profiles/recent", "token-boosts/latest", "token-boosts/top", "ads/latest", "community-takeovers/latest"];
+        const entries = await Promise.all(endpoints.map(async (endpoint) => {
+          const response = await fetch("/api/v1/dex/" + endpoint, { cache: "no-store" });
+          if (!response.ok) throw new Error(endpoint + " HTTP " + response.status);
+          return [endpoint, await response.json()] as const;
+        }));
+        setLaunches(Object.fromEntries(entries));
+        setLaunchError("");
+      } catch (e) {
+        setLaunchError(e instanceof Error ? e.message : "DEX Screener request failed");
+      }
+    };
+    void loadLaunches();
+    const timer = window.setInterval(() => void loadLaunches(), 15000);
+    return () => window.clearInterval(timer);
+  }, [module]);
+
   const data: Record<string,{title:string;items:string[];note:string}> = {
     "alpha-signals":{title:"Signal Validation",items:["Market regime","News catalyst","Narrative confirmation","Momentum confirmation","Liquidity check","Risk / invalidation"],note:"Signal scoring membutuhkan market + on-chain inputs. Tidak ada LONG/SHORT palsu yang ditampilkan."},
     launches:{title:"Launch Radar",items:["New token profiles","Recent profile updates","Token boosts","Top boosts","Ads activity","Community takeovers"],note:"Sumber live: DEX Screener API. Detail token/pair akan ditampilkan melalui query chain/address."},
@@ -164,7 +187,7 @@ function OperationalModule({ module, intel }: { module: ModuleKey; intel: IntelR
     settings:{title:"System Status",items:["API","News feed","Market feed","DEX Screener","NVIDIA AI","Redis / Worker"],note:"Status harus berasal dari health check, bukan label dummy."},
   };
   const d=data[module]; if(!d) return null;
-  return <div className="space-y-5"><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Kpi label="Module" value={meta[module].title}/><Kpi label="News Feed" value={intel ? "ONLINE":"OFFLINE"} detail={intel ? String(intel.news.length)+" stories":"no response"}/><Kpi label="Market Feed" value={intel?.markets.length ? "ONLINE":"NO DATA"} detail="CoinGecko"/><Kpi label="Refresh" value={intel ? Math.round(intel.refreshMs/1000)+"s":"—"}/></div><Section title={d.title}><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{d.items.map(x=><div key={x} className="rounded-xl border border-white/5 bg-white/[.02] p-4"><div className="text-sm text-slate-300">{x}</div><div className="mt-2 text-[10px] uppercase tracking-wider text-slate-600">{module==="settings"?"status check":"data input"}</div></div>)}</div><div className="mt-4 rounded-xl border border-amber-400/10 bg-amber-400/[.03] p-4 text-xs leading-5 text-slate-500">{d.note}</div></Section>{module==="settings"&&<Section title="Current News Sources"><div className="grid gap-2 sm:grid-cols-2">{(intel?.sources??[]).map(s=><div key={s} className="rounded-xl border border-white/5 p-3 text-xs text-slate-300">{s}<span className="float-right text-emerald-400">online</span></div>)}</div></Section>}</div>;
+  return <div className="space-y-5"><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Kpi label="Module" value={meta[module].title}/><Kpi label="News Feed" value={intel ? "ONLINE":"OFFLINE"} detail={intel ? String(intel.news.length)+" stories":"no response"}/><Kpi label="Market Feed" value={intel?.markets.length ? "ONLINE":"NO DATA"} detail="CoinGecko"/><Kpi label="Refresh" value={intel ? Math.round(intel.refreshMs/1000)+"s":"—"}/></div><Section title={d.title}><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{d.items.map(x=><div key={x} className="rounded-xl border border-white/5 bg-white/[.02] p-4"><div className="text-sm text-slate-300">{x}</div><div className="mt-2 text-[10px] uppercase tracking-wider text-slate-600">{module==="settings"?"status check":"data input"}</div></div>)}</div><div className="mt-4 rounded-xl border border-amber-400/10 bg-amber-400/[.03] p-4 text-xs leading-5 text-slate-500">{d.note}</div></Section>{module==="launches"&&<Section title="Live DEX Screener Feeds">{launchError&&<div className="mb-3 rounded-xl border border-rose-400/10 bg-rose-400/[.03] p-3 text-xs text-rose-300">{launchError}</div>}<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{["token-profiles/latest","token-profiles/recent","token-boosts/latest","token-boosts/top","ads/latest","community-takeovers/latest"].map(key=>{const value=launches?.[key];const count=Array.isArray(value)?value.length:(value&&typeof value==="object"&&Array.isArray((value as {pairs?:unknown[]}).pairs)?(value as {pairs:unknown[]}).pairs.length:0);return <div key={key} className="rounded-xl border border-white/5 bg-white/[.02] p-4"><div className="text-xs text-slate-400">{key}</div><div className="mt-2 text-xl font-bold text-slate-200">{launches?count:"—"}</div><div className="mt-1 text-[10px] uppercase tracking-wider text-slate-600">records</div></div>})}</div></Section>}{module==="settings"&&<Section title="Current News Sources"><div className="grid gap-2 sm:grid-cols-2">{(intel?.sources??[]).map(s=><div key={s} className="rounded-xl border border-white/5 p-3 text-xs text-slate-300">{s}<span className="float-right text-emerald-400">online</span></div>)}</div></Section>}</div>;
 }
 
 export default function IntelligenceModule({ module }: { module: ModuleKey }) {
