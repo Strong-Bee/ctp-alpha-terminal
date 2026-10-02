@@ -17,7 +17,8 @@ export async function POST(request: Request) {
   if (!message) return NextResponse.json({ error: "Message is required" }, { status: 400 });
 
   const baseUrl = (process.env.NVIDIA_BASE_URL || "https://integrate.api.nvidia.com/v1").replace(/\/$/, "");
-  const model = process.env.NVIDIA_MODEL || "nvidia/nemotron-3-ultra-550b-a55b";
+  const requestedModel = String(body.model || "").trim();
+  const model = requestedModel || process.env.NVIDIA_MODEL || "nvidia/nemotron-3-ultra-550b-a55b";
   const apiKey = process.env.NVIDIA_API_KEY;
   if (!apiKey) return NextResponse.json({ error: "NVIDIA_API_KEY belum diatur di .env.local/.env" }, { status: 400 });
 
