@@ -73,13 +73,12 @@ function AIAssistantModule() {
   const [message,setMessage]=useState("");
   const [answer,setAnswer]=useState("");
   const [loading,setLoading]=useState(false);
-  const [saving,setSaving]=useState(false);
   const [testing,setTesting]=useState(false);
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
   const [settings,setSettings]=useState({
     provider:"nvidia", baseUrl:"https://integrate.api.nvidia.com/v1", model:"nvidia/nemotron-3-ultra-550b-a55b",
-    apiKey:"", apiKeyConfigured:false, enableThinking:true, reasoningEffort:"medium", temperature:0.15, maxTokens:4096,
+    apiKeyConfigured:false, enableThinking:true, reasoningEffort:"medium", temperature:0.15, maxTokens:4096,
   });
 
   const parseJsonResponse = async (response: Response): Promise<Record<string, any>> => {
@@ -98,39 +97,18 @@ function AIAssistantModule() {
     }catch(e){setError(e instanceof Error?e.message:"Failed to load AI settings");}
   },[]);
   useEffect(()=>{void loadSettings();},[loadSettings]);
-  const saveSettings=async()=>{
-    if(saving)return;
-    setSaving(true);setError("");setNotice("");
-    try{
-      const payload={
-        provider: settings.provider,
-        baseUrl: settings.baseUrl.trim(),
-        model: settings.model.trim(),
-        apiKey: settings.apiKey.trim(),
-        enableThinking: settings.enableThinking,
-        reasoningEffort: settings.reasoningEffort,
-        temperature: Number(settings.temperature),
-        maxTokens: Number(settings.maxTokens),
-      };
-      if(!payload.baseUrl) throw new Error("Base URL wajib diisi");
-      if(!/^https:\/\//i.test(payload.baseUrl)) throw new Error("Base URL harus menggunakan HTTPS");
-      if(!payload.model) throw new Error("Model wajib diisi");
-      if(!Number.isFinite(payload.temperature)||payload.temperature<0||payload.temperature>1) throw new Error("Temperature harus 0 sampai 1");
-      if(!Number.isInteger(payload.maxTokens)||payload.maxTokens<64||payload.maxTokens>32768) throw new Error("Max Tokens harus 64 sampai 32768");
 
-      const r=await fetch("/api/ai/config",{
-        method:"POST",
-        credentials:"same-origin",
-        headers:{"Content-Type":"application/json","Accept":"application/json"},
-        body:JSON.stringify(payload),
-        cache:"no-store",
-      });
+  const testModel=async()=>{
+    if(testing)return;
+    setTesting(true);setError("");setNotice("");setAnswer("");
+    try{
+      const r=await fetch("/api/ai/test",{method:"POST",credentials:"same-origin",cache:"no-store",headers:{"Content-Type":"application/json","Accept":"application/json"}});
       const data=await parseJsonResponse(r);
-      if(!r.ok) throw new Error(data.error||("Save failed (HTTP "+r.status+")"));
-      setSettings(v=>({...v,...(data.settings||{}),apiKey:"",apiKeyConfigured:Boolean(data.settings?.apiKeyConfigured ?? data.apiKeyConfigured)}));
-      setNotice("AI model settings berhasil disimpan ke database untuk akun ini.");
-    }catch(e){setError(e instanceof Error?e.message:"Failed to save AI settings");}
-    finally{setSaving(false);}
+      if(!r.ok) throw new Error(data.error||("Connection test failed (HTTP "+r.status+")"));
+      setAnswer(data.answer||"CTP AI connection OK");
+      setNotice("Model connection berhasil • "+String(data.latencyMs??"—")+" ms • "+String(data.model||settings.model));
+    }catch(e){setError(e instanceof Error?e.message:"Connection test failed");}
+    finally{setTesting(false);}
   };
 
   const send=async()=>{
@@ -145,70 +123,48 @@ function AIAssistantModule() {
     finally{setLoading(false);}
   };
 
-  const testModel=async()=>{
-    if(testing)return;
-    setTesting(true);setError("");setNotice("");setAnswer("");
-    try{
-      const r=await fetch("/api/ai/test",{method:"POST",credentials:"same-origin",cache:"no-store",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({
-        provider:settings.provider, baseUrl:settings.baseUrl.trim(), model:settings.model.trim(), apiKey:settings.apiKey.trim(),
-        reasoningEffort:settings.reasoningEffort, temperature:Number(settings.temperature), maxTokens:Number(settings.maxTokens), enableThinking:settings.enableThinking,
-      })});
-      const data=await parseJsonResponse(r);
-      if(!r.ok) throw new Error(data.error||("Connection test failed (HTTP "+r.status+")"));
-      setAnswer(data.answer||"CTP AI connection OK");
-      setNotice("Model connection berhasil • "+String(data.latencyMs??"—")+" ms • "+String(data.model||settings.model));
-    }catch(e){setError(e instanceof Error?e.message:"Connection test failed");}
-    finally{setTesting(false);}
-  };
-
   return <div className="space-y-5">
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <Kpi label="Provider" value={settings.provider.toUpperCase()}/>
       <Kpi label="Model" value={settings.model.split("/").pop()||settings.model}/>
-      <Kpi label="API Key" value={settings.apiKeyConfigured?"CONFIGURED":"REQUIRED"} detail="stored server-side"/>
+      <Kpi label="API Key" value={settings.apiKeyConfigured?"CONFIGURED":"REQUIRED"} detail="from ENV"/>
       <Kpi label="Reasoning" value={settings.reasoningEffort.toUpperCase()}/>
     </div>
 
     <Section title="AI Model Settings">
       <div className="grid gap-4 md:grid-cols-2">
         <label className="text-xs text-slate-500">Provider
-          <select value={settings.provider} onChange={e=>setSettings(v=>({...v,provider:e.target.value}))} className="mt-2 w-full rounded-xl border border-white/10 bg-[#0a0e15] px-3 py-3 text-sm text-white outline-none focus:border-cyan-400/30">
-            <option value="nvidia">NVIDIA NIM</option><option value="openai">OpenAI-compatible</option><option value="openrouter">OpenRouter</option><option value="custom">Custom OpenAI-compatible</option>
-          </select>
+          <input value={settings.provider.toUpperCase()} readOnly className="mt-2 w-full rounded-xl border border-white/10 bg-[#0a0e15] px-3 py-3 text-sm text-slate-300"/>
         </label>
         <label className="text-xs text-slate-500">Model
-          <input value={settings.model} onChange={e=>setSettings(v=>({...v,model:e.target.value}))} placeholder="nvidia/nemotron-3-ultra-550b-a55b" className="mt-2 w-full rounded-xl border border-white/10 bg-[#0a0e15] px-3 py-3 text-sm text-white outline-none focus:border-cyan-400/30"/>
-          <span className="mt-2 block text-[10px] text-slate-600">Masukkan model ID yang tersedia dari provider.</span>
+          <input value={settings.model} readOnly className="mt-2 w-full rounded-xl border border-white/10 bg-[#0a0e15] px-3 py-3 text-sm text-slate-300"/>
         </label>
         <label className="text-xs text-slate-500 md:col-span-2">Base URL
-          <input value={settings.baseUrl} onChange={e=>setSettings(v=>({...v,baseUrl:e.target.value}))} placeholder="https://integrate.api.nvidia.com/v1" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-white outline-none focus:border-cyan-400/30"/>
+          <input value={settings.baseUrl} readOnly className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-slate-300"/>
         </label>
-        <label className="text-xs text-slate-500 md:col-span-2">API Key
-          <input type="password" value={settings.apiKey} onChange={e=>setSettings(v=>({...v,apiKey:e.target.value}))} placeholder={settings.apiKeyConfigured?"Key tersimpan — isi hanya untuk mengganti":"Masukkan API key"} autoComplete="new-password" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-white outline-none focus:border-cyan-400/30"/>
-          <span className="mt-2 block text-[10px] text-slate-600">API key dienkripsi dan disimpan server-side per akun. Tidak dikirim kembali ke browser.</span>
-        </label>
+        <div className="md:col-span-2 rounded-xl border border-cyan-400/10 bg-cyan-400/[.03] p-4 text-xs leading-5 text-slate-400">
+          API key dan konfigurasi AI dibaca dari <code className="text-cyan-300">.env.local</code> / <code className="text-cyan-300">.env</code> di server. API key tidak pernah dikirim ke browser.
+        </div>
         <label className="text-xs text-slate-500">Reasoning
-          <select value={settings.reasoningEffort} onChange={e=>setSettings(v=>({...v,reasoningEffort:e.target.value}))} className="mt-2 w-full rounded-xl border border-white/10 bg-[#0a0e15] px-3 py-3 text-sm text-white">
-            <option value="none">None</option><option value="medium">Medium</option><option value="high">High</option>
-          </select>
+          <input value={settings.reasoningEffort.toUpperCase()} readOnly className="mt-2 w-full rounded-xl border border-white/10 bg-[#0a0e15] px-3 py-3 text-sm text-slate-300"/>
         </label>
         <label className="text-xs text-slate-500">Temperature
-          <input type="number" min="0" max="1" step="0.05" value={settings.temperature} onChange={e=>setSettings(v=>({...v,temperature:Number(e.target.value)}))} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-white"/>
+          <input value={settings.temperature} readOnly className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-slate-300"/>
         </label>
         <label className="text-xs text-slate-500">Max Tokens
-          <input type="number" min="64" max="32768" step="256" value={settings.maxTokens} onChange={e=>setSettings(v=>({...v,maxTokens:Number(e.target.value)}))} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-white"/>
+          <input value={settings.maxTokens} readOnly className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-slate-300"/>
         </label>
-        <label className="flex items-center gap-2 text-xs text-slate-400"><input type="checkbox" checked={settings.enableThinking} onChange={e=>setSettings(v=>({...v,enableThinking:e.target.checked}))} className="accent-cyan-300"/> Enable thinking</label>
+        <label className="flex items-center gap-2 text-xs text-slate-400"><input type="checkbox" checked={settings.enableThinking} readOnly className="accent-cyan-300"/> Enable thinking</label>
       </div>
       <div className="mt-4 flex flex-wrap gap-3">
-        <button type="button" onClick={()=>void saveSettings()} disabled={saving} className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-bold text-slate-950 disabled:opacity-40">{saving?"Saving…":"Save AI Settings"}</button>
-        <button type="button" onClick={()=>void testModel()} disabled={testing || (!settings.apiKeyConfigured && !settings.apiKey.trim())} className="rounded-xl border border-cyan-400/20 px-4 py-2.5 text-xs font-semibold text-cyan-300 disabled:opacity-30">{testing?"Testing…":"Test Model"}</button>
+        <button type="button" onClick={()=>void loadSettings()} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs font-semibold text-slate-300">Reload ENV</button>
+        <button type="button" onClick={()=>void testModel()} disabled={testing || !settings.apiKeyConfigured} className="rounded-xl border border-cyan-400/20 px-4 py-2.5 text-xs font-semibold text-cyan-300 disabled:opacity-30">{testing?"Testing…":"Test Model"}</button>
       </div>
     </Section>
 
     <Section title="CTP Alpha AI">
       <div className="rounded-2xl border border-cyan-400/10 bg-cyan-400/[.025] p-4 sm:p-6">
-        <div className="mb-4 text-sm text-slate-400">Model dapat diganti langsung dari dashboard. Setting disimpan per akun dan tidak perlu mengubah ENV setiap kali mengganti model.</div>
+        <div className="mb-4 text-sm text-slate-400">Konfigurasi AI terpusat melalui ENV server. Setelah mengubah .env, restart Next.js agar konfigurasi baru terbaca.</div>
         <textarea value={message} onChange={e=>setMessage(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();void send();}}} placeholder="Contoh: Analisis BTC berdasarkan news dan market data saat ini..." className="min-h-32 w-full resize-y rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-white outline-none placeholder:text-slate-700 focus:border-cyan-400/30"/>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><span className="text-[10px] text-slate-600">Enter untuk kirim • Shift+Enter untuk baris baru</span><button disabled={loading||!message.trim()||!settings.apiKeyConfigured} onClick={()=>void send()} className="rounded-xl bg-cyan-400 px-4 py-2.5 text-sm font-bold text-black disabled:cursor-not-allowed disabled:opacity-40">{loading?"Analyzing…":"Ask Alpha AI"}</button></div>
       </div>
