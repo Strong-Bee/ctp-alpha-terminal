@@ -29,3 +29,16 @@ body::-webkit-scrollbar {
   width: 0;
   height: 0;
 }
+
+
+/* Hide scrollbars for internal UI panels while preserving scrolling. */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
