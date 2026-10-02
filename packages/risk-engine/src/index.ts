@@ -1,0 +1,3 @@
+export interface PositionSizeInput{equity:number;riskPercent:number;entry:number;stopLoss:number}
+export function calculatePositionSize(input:PositionSizeInput){const riskCapital=input.equity*(input.riskPercent/100);const stopDistance=Math.abs(input.entry-input.stopLoss);return stopDistance<=0?0:riskCapital/stopDistance}
+export function calculateRiskReward(entry:number,stopLoss:number,takeProfit:number){const risk=Math.abs(entry-stopLoss);return risk===0?0:Math.abs(takeProfit-entry)/risk}
