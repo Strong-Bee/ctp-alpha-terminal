@@ -61,7 +61,7 @@ router.post("/chat", async (req, res) => {
       messages: [
         { role: "system", content: ALPHA_SYSTEM_PROMPT },
         ...(parsed.data.context
-          ? [{ role: "user" as const, content: `Terminal context:\n${parsed.data.context}` }]
+          ? [{ role: "system" as const, content: `Terminal context:\n${parsed.data.context}` }]
           : []),
         { role: "user", content: parsed.data.message },
       ],
