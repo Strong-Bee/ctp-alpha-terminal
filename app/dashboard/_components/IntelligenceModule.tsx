@@ -93,13 +93,36 @@ function AIAssistantModule() {
   useEffect(()=>{void loadSettings();},[loadSettings]);
 
   const saveSettings=async()=>{
+    if(saving)return;
     setSaving(true);setError("");setNotice("");
     try{
-      const r=await fetch("/api/ai/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(settings)});
-      const data=await r.json();
-      if(!r.ok) throw new Error(data.error||"Failed to save AI settings");
-      setSettings(v=>({...v,apiKey:"",apiKeyConfigured:Boolean(data.apiKeyConfigured)}));
-      setNotice("AI model settings tersimpan untuk akun ini.");
+      const payload={
+        provider: settings.provider,
+        baseUrl: settings.baseUrl.trim(),
+        model: settings.model.trim(),
+        apiKey: settings.apiKey.trim(),
+        enableThinking: settings.enableThinking,
+        reasoningEffort: settings.reasoningEffort,
+        temperature: Number(settings.temperature),
+        maxTokens: Number(settings.maxTokens),
+      };
+      if(!payload.baseUrl) throw new Error("Base URL wajib diisi");
+      if(!/^https:\/\//i.test(payload.baseUrl)) throw new Error("Base URL harus menggunakan HTTPS");
+      if(!payload.model) throw new Error("Model wajib diisi");
+      if(!Number.isFinite(payload.temperature)||payload.temperature<0||payload.temperature>1) throw new Error("Temperature harus 0 sampai 1");
+      if(!Number.isInteger(payload.maxTokens)||payload.maxTokens<64||payload.maxTokens>32768) throw new Error("Max Tokens harus 64 sampai 32768");
+
+      const r=await fetch("/api/ai/config",{
+        method:"POST",
+        credentials:"same-origin",
+        headers:{"Content-Type":"application/json","Accept":"application/json"},
+        body:JSON.stringify(payload),
+        cache:"no-store",
+      });
+      const data=await r.json().catch(()=>({}));
+      if(!r.ok) throw new Error(data.error||("Save failed (HTTP "+r.status+")"));
+      setSettings(v=>({...v,...(data.settings||{}),apiKey:"",apiKeyConfigured:Boolean(data.settings?.apiKeyConfigured ?? data.apiKeyConfigured)}));
+      setNotice("AI model settings berhasil disimpan ke database untuk akun ini.");
     }catch(e){setError(e instanceof Error?e.message:"Failed to save AI settings");}
     finally{setSaving(false);}
   };
@@ -167,8 +190,8 @@ function AIAssistantModule() {
         <label className="flex items-center gap-2 text-xs text-slate-400"><input type="checkbox" checked={settings.enableThinking} onChange={e=>setSettings(v=>({...v,enableThinking:e.target.checked}))} className="accent-cyan-300"/> Enable thinking</label>
       </div>
       <div className="mt-4 flex flex-wrap gap-3">
-        <button onClick={()=>void saveSettings()} disabled={saving} className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-bold text-slate-950 disabled:opacity-40">{saving?"Saving…":"Save AI Settings"}</button>
-        <button onClick={()=>void testModel()} disabled={testing || !settings.apiKeyConfigured} className="rounded-xl border border-cyan-400/20 px-4 py-2.5 text-xs font-semibold text-cyan-300 disabled:opacity-30">{testing?"Testing…":"Test Model"}</button>
+        <button type="button" onClick={()=>void saveSettings()} disabled={saving} className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-bold text-slate-950 disabled:opacity-40">{saving?"Saving…":"Save AI Settings"}</button>
+        <button type="button" onClick={()=>void testModel()} disabled={testing || !settings.apiKeyConfigured} className="rounded-xl border border-cyan-400/20 px-4 py-2.5 text-xs font-semibold text-cyan-300 disabled:opacity-30">{testing?"Testing…":"Test Model"}</button>
       </div>
     </Section>
 
