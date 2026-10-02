@@ -13,3 +13,40 @@ model DeFiPool { id String @id @default(cuid()) chain Chain protocol String pool
 model MarketSnapshot { id String @id @default(cuid()) assetId String price Decimal @db.Decimal(38,18) change24h Float? volume24h Decimal? @db.Decimal(38,18) capturedAt DateTime @default(now()) asset Asset @relation(fields:[assetId],references:[id],onDelete:Cascade) @@index([assetId,capturedAt]) }
 model Signal { id String @id @default(cuid()) assetId String? side SignalSide score Float confidence Float thesis String? entry Decimal? @db.Decimal(38,18) stopLoss Decimal? @db.Decimal(38,18) takeProfit Decimal? @db.Decimal(38,18) createdAt DateTime @default(now()) asset Asset? @relation(fields:[assetId],references:[id]) @@index([createdAt,score]) }
 model TradeThesis { id String @id @default(cuid()) title String summary String status String @default("DRAFT") confidence Float @default(0) createdAt DateTime @default(now()) updatedAt DateTime @updatedAt }
+
+model UserAlertSettings {
+  id String @id @default(cuid())
+  userEmail String @unique
+  telegramEnabled Boolean @default(false)
+  telegramBotTokenEncrypted String?
+  telegramChatId String?
+  priceAlerts Boolean @default(true)
+  newsAlerts Boolean @default(true)
+  walletAlerts Boolean @default(true)
+  launchAlerts Boolean @default(true)
+  riskAlerts Boolean @default(true)
+  macroAlerts Boolean @default(true)
+  realtime Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  events AlertEvent[]
+  @@index([userEmail])
+}
+
+model AlertEvent {
+  id String @id @default(cuid())
+  userEmail String
+  settingsId String
+  type String
+  title String
+  message String
+  severity String @default("INFO")
+  source String?
+  metadata Json?
+  sentTelegram Boolean @default(false)
+  sentAt DateTime?
+  createdAt DateTime @default(now())
+  settings UserAlertSettings @relation(fields:[settingsId],references:[id],onDelete:Cascade)
+  @@index([userEmail,createdAt])
+  @@index([settingsId,createdAt])
+}
