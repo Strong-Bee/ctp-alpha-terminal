@@ -99,7 +99,8 @@ function AIAssistantModule() {
       setSettings(v=>({...v,...data.settings}));
     }catch(e){setError(e instanceof Error?e.message:"Failed to load AI settings");}
   },[]);
-  useEffect(()=>{void loadSettings();},[loadSettings]);\n  useEffect(()=>{
+  useEffect(()=>{void loadSettings();},[loadSettings]);
+  useEffect(()=>{
     const key=settings.apiKey.trim();
     if(!key && !settings.apiKeyConfigured){ setModels([]); return; }
     let cancelled=false;
