@@ -117,6 +117,8 @@ function AIAssistantModule() {
   const [models,setModels]=useState<string[]>([]);
   const [model,setModel]=useState("nvidia/nemotron-3-ultra-550b-a55b");
   const [modelsLoading,setModelsLoading]=useState(true);
+  const [deepSearch,setDeepSearch]=useState(false);
+  const [sources,setSources]=useState<Array<{id:number;title:string;url:string}>>([]);
 
   const parseJsonResponse = async (response: Response): Promise<Record<string, any>> => {
     const raw = await response.text();
@@ -149,8 +151,10 @@ function AIAssistantModule() {
     if(!message.trim()||loading)return;
     setLoading(true);
     setError("");
+    setSources([]);
     try{
-      const r=await fetch("/api/ai/chat",{
+      const endpoint = deepSearch ? "/api/ai/deep-search" : "/api/ai/chat";
+      const r=await fetch(endpoint,{
         method:"POST",
         credentials:"same-origin",
         cache:"no-store",
@@ -160,6 +164,7 @@ function AIAssistantModule() {
       const data=await parseJsonResponse(r);
       if(!r.ok) throw new Error(data.error||"AI request failed");
       setAnswer(data.answer||"AI returned an empty answer");
+      if (Array.isArray(data.sources)) setSources(data.sources);
     }catch(e){
       setError(e instanceof Error?e.message:"AI request failed");
     }finally{
@@ -190,6 +195,17 @@ function AIAssistantModule() {
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cyan-400/10 bg-cyan-400/[.03] px-3 py-2.5">
+          <label className="flex cursor-pointer items-center gap-3 text-xs text-slate-300">
+            <input type="checkbox" checked={deepSearch} onChange={e=>setDeepSearch(e.target.checked)} className="accent-cyan-300"/>
+            <span>
+              <span className="block font-semibold text-cyan-200">Deep Search</span>
+              <span className="block text-[10px] text-slate-600">Riset multi-source + sintesis NVIDIA dengan citations</span>
+            </span>
+          </label>
+          {deepSearch && <span className="rounded-full border border-cyan-400/15 px-2 py-1 text-[9px] uppercase tracking-wider text-cyan-300/70">Web Research</span>}
+        </div>
+
         <div className="rounded-2xl border border-white/10 bg-black/20 p-3 sm:p-4">
           <textarea
             value={message}
@@ -206,17 +222,28 @@ function AIAssistantModule() {
               onClick={()=>void send()}
               className="rounded-xl bg-cyan-400 px-5 py-2.5 text-sm font-bold text-black disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {loading?"Thinking…":"Send"}
+              {loading?(deepSearch?"Researching…":"Thinking…"):"Send"}
             </button>
           </div>
         </div>
       </div>
     </Section>
 
-    {(error||answer)&&<Section title="AI Response">
+    {(error||answer)&&<Section title={deepSearch ? "Deep Research Response" : "AI Response"}>
       {error
         ? <div className="rounded-xl border border-rose-400/10 bg-rose-400/[.03] p-4 text-sm leading-6 text-rose-300">{error}</div>
-        : <div className="rounded-xl border border-white/5 bg-black/20 p-4 sm:p-5"><MarkdownResponse content={answer}/></div>}
+        : <div className="space-y-4">
+            <div className="rounded-xl border border-white/5 bg-black/20 p-4 sm:p-5"><MarkdownResponse content={answer}/></div>
+            {deepSearch && sources.length > 0 && <div className="rounded-xl border border-white/5 bg-white/[.015] p-4">
+              <div className="mb-3 text-[10px] font-bold uppercase tracking-[.2em] text-slate-600">Research Sources ({sources.length})</div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {sources.map(source=><a key={source.id} href={source.url} target="_blank" rel="noopener noreferrer" className="rounded-xl border border-white/5 bg-black/20 p-3 transition hover:border-cyan-400/20 hover:bg-cyan-400/[.03]">
+                  <div className="text-xs font-semibold leading-5 text-slate-300">{source.id}. {source.title}</div>
+                  <div className="mt-1 truncate text-[10px] text-cyan-300/70">{source.url}</div>
+                </a>)}
+              </div>
+            </div>}
+          </div>}
     </Section>}
   </div>;
 }
