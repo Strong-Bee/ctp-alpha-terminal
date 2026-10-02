@@ -241,7 +241,7 @@ function MarketTable({ markets }: { markets: MarketItem[] }) {
     </table>
   </div>;
 }
-function TradingViewChart({ symbol = "BINANCE:BTCUSDT", height = 680 }: { symbol?: string; height?: number }) {
+function TradingViewChart({ symbol = "BINANCE:BTCUSDT", height = 900 }: { symbol?: string; height?: number }) {
   const [host, setHost] = useState<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -430,7 +430,7 @@ function MarketsModule({ intel }: { intel: IntelResponse | null }) {
   return <div className="space-y-5">
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Kpi label="Tracked Assets" value={String(markets.length)} detail="CoinGecko market feed"/><Kpi label="Top Volume" value={volume?.symbol ?? "—"} detail={volume ? formatUsd(volume.volume24h) : "no data"}/><Kpi label="Top Gainer" value={gainers[0] ? gainers[0].symbol + " " + (gainers[0].change24h >= 0 ? "+" : "") + gainers[0].change24h.toFixed(2) + "%" : "—"}/><Kpi label="Top Loser" value={losers[0] ? losers[0].symbol + " " + losers[0].change24h.toFixed(2) + "%" : "—"}/></div>
     <Section title="TradingView Market Chart">
-      <div className="-mx-4 sm:-mx-6 lg:-mx-8"><TradingViewChart symbol="BINANCE:BTCUSDT" height={720}/></div>
+      <div className="-mx-4 sm:-mx-6 lg:-mx-8"><div className="w-full min-w-0 overflow-hidden"><div className="h-[560px] w-full sm:h-[700px] lg:h-[900px]"><TradingViewChart symbol="BINANCE:BTCUSDT" height={900}/></div></div></div>
     </Section>
     <Section title="Live Market Scanner">{markets.length ? <MarketTable markets={markets}/> : <EmptyState title="Market feed kosong"/>}</Section>
     <div className="grid gap-5 xl:grid-cols-2"><Section title="Top Gainers"><MarketTable markets={gainers}/></Section><Section title="Top Losers"><MarketTable markets={losers}/></Section></div>
