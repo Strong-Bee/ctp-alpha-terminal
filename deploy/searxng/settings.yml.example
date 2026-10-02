@@ -1,0 +1,14 @@
+# CTP Alpha Terminal - SearXNG settings template
+# Copy to the SearXNG instance (commonly /etc/searxng/settings.yml).
+# Replace secret_key before starting SearXNG.
+
+use_default_settings: true
+
+server:
+  secret_key: "CHANGE_ME_TO_A_LONG_RANDOM_SECRET"
+  bind_address: "127.0.0.1:8080"
+
+search:
+  formats:
+    - html
+    - json
