@@ -20,7 +20,7 @@ const FAILURE_COOLDOWN_MS = Math.max(
   10_000,
 );
 const MAX_FAILURES = Math.min(
-  Math.max(Number(process.env.SEARXNG_MAX_FAILURES) || 2, 1),
+  Math.max(Number(process.env.SEARXNG_MAX_FAILURES) || 1, 1),
   5,
 );
 
@@ -161,16 +161,22 @@ async function requestFromInstance(
   });
 
   const raw = await response.text();
+  const contentType = response.headers.get("content-type") || "";
   let data: { results?: unknown[]; error?: string } = {};
+
+  if (!response.ok) {
+    const detail = raw.replace(/\\s+/g, " ").trim().slice(0, 240);
+    throw new Error(
+      `${instance.url} returned HTTP ${response.status}${detail ? `: ${detail}` : ""}`,
+    );
+  }
+
   try {
     data = JSON.parse(raw) as typeof data;
   } catch {
-    throw new Error(`${instance.url} returned invalid JSON`);
-  }
-
-  if (!response.ok) {
+    const looksLikeHtml = /<\\s*!doctype|<\\s*html/i.test(raw) || contentType.includes("text/html");
     throw new Error(
-      data.error || `${instance.url} returned HTTP ${response.status}`,
+      `${instance.url} returned ${looksLikeHtml ? "HTML instead of JSON" : "invalid JSON"}; JSON format may be disabled on this public instance`,
     );
   }
 
