@@ -8,7 +8,9 @@ type SearchResult = {
   title?: string;
   url?: string;
   description?: string;
-  markdown?: string;
+  content?: string;
+  publishedDate?: string;
+  engine?: string;
 };
 
 const buildQueries = (message: string) => [
@@ -17,33 +19,27 @@ const buildQueries = (message: string) => [
   message + " risks counterarguments technical analysis",
 ];
 
-async function firecrawlSearch(query: string, apiKey: string): Promise<SearchResult[]> {
-  const response = await fetch("https://api.firecrawl.dev/v2/search", {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      Authorization: "Bearer " + apiKey,
-    },
-    body: JSON.stringify({
-      query,
-      limit: 5,
-      sources: [{ type: "web" }, { type: "news" }],
-      scrapeOptions: { formats: ["markdown"], onlyMainContent: true },
-    }),
-    signal: AbortSignal.timeout(30000),
+async function searxngSearch(query: string): Promise<SearchResult[]> {
+  const baseUrl = (process.env.SEARXNG_URL || "").replace(/\/$/, "");
+  if (!baseUrl) throw new Error("SEARXNG_URL belum diatur di .env.local/.env untuk Deep Search");
+  const url = new URL(baseUrl + "/search");
+  url.searchParams.set("q", query);
+  url.searchParams.set("format", "json");
+  url.searchParams.set("language", "en");
+  url.searchParams.set("safesearch", "0");
+  const response = await fetch(url, {
+    headers: { Accept: "application/json", "User-Agent": "CTP-Alpha-Terminal/1.0" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(20000),
   });
-
   const raw = await response.text();
   let data: any = {};
-  try { data = JSON.parse(raw); } catch {
-    throw new Error("Firecrawl returned invalid JSON");
-  }
-  if (!response.ok) throw new Error(data.error || "Firecrawl search failed");
-
-  const web = Array.isArray(data.data?.web) ? data.data.web : [];
-  const news = Array.isArray(data.data?.news) ? data.data.news : [];
-  return [...web, ...news];
+  try { data = JSON.parse(raw); } catch { throw new Error("SearXNG returned invalid JSON"); }
+  if (!response.ok) throw new Error(data?.error || "SearXNG search failed");
+  return Array.isArray(data.results) ? data.results.map((item: any) => ({
+    title: item.title, url: item.url, description: item.content, content: item.content,
+    publishedDate: item.publishedDate, engine: item.engine,
+  })) : [];
 }
 
 async function askNvidia(
@@ -123,12 +119,12 @@ export async function POST(request: Request) {
   if (!message) return NextResponse.json({ error: "Message is required" }, { status: 400 });
 
   const nvidiaKey = process.env.NVIDIA_API_KEY;
-  const firecrawlKey = process.env.FIRECRAWL_API_KEY;
+  const searxngUrl = process.env.SEARXNG_URL;
   if (!nvidiaKey) return NextResponse.json({ error: "NVIDIA_API_KEY belum diatur di .env.local/.env" }, { status: 400 });
-  if (!firecrawlKey) return NextResponse.json({ error: "FIRECRAWL_API_KEY belum diatur di .env.local/.env untuk Deep Search" }, { status: 400 });
+  if (!searxngUrl) return NextResponse.json({ error: "SEARXNG_URL belum diatur di .env.local/.env untuk Deep Search" }, { status: 400 });
 
   try {
-    const results = (await Promise.all(buildQueries(message).map(query => firecrawlSearch(query, firecrawlKey))).flat())
+    const results = (await Promise.all(buildQueries(message).map(query => searxngSearch(query))).flat())
       .filter(item => item.url)
       .filter((item, index, arr) => arr.findIndex(x => x.url === item.url) === index)
       .slice(0, 12);
@@ -136,7 +132,7 @@ export async function POST(request: Request) {
     if (!results.length) return NextResponse.json({ error: "Deep Search tidak menemukan sumber yang relevan" }, { status: 502 });
 
     const context = results.map((item, index) => {
-      const content = String(item.markdown || item.description || "").slice(0, 7000);
+      const content = String(item.content || item.description || "").slice(0, 7000);
       return `SOURCE [${index + 1}]
 TITLE: ${item.title || "Untitled"}
 URL: ${item.url}
